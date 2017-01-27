@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 
-import App from './app';
+import App from '../lib/app';
 
 describe('App', function () {
   var app;
@@ -8,4 +8,3 @@ describe('App', function () {
 
 
 });
- 

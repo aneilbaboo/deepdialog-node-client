@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 
-import {App, Dialog} from '..';
+import {App, Dialog, NLPModel} from '..';
 
 describe('Feature tests', function () {
   context('App', function () {
@@ -31,22 +31,39 @@ describe('Feature tests', function () {
       app.nlpModels = [];
       app.mainDialog = "";
 
+      mainNLP = new NLPModel({
+        name: 'mainNLP',
+        provider: 'apiai',
+        accessToken: process.env.APIAI_TEST_MAINNLP_ACCESS_TOKEN
+      });
+
+      childNLP = new NLPModel({
+        name: 'childNLP',
+        provider: 'apiai',
+        accessToken: process.env.APIAI_TEST_CHILDNLP_ACCESS_TOKEN
+      });
+
       mainDialog = new Dialog({
-        name: 'MainDialog'
+        name: 'MainDialog',
+        nlpModelName: 'mainNLP'
       });
 
       mainDialog.onIntent('hello', async function(session) {
         await session.respond('Hello there!');
-      })
-
-      childDialog = new Dialog({
-        name: 'ChildDialog'
       });
 
-      async function (session) {
-x
-      })
+      childDialog = new Dialog({
+        name: 'ChildDialog',
+        nlpModelName: 'childNLP'
+      });
+
+      childDialog.onIntent('buy_tickets', async function (session, entities) {
+        await session.respond(`Ok, that's great, let's get you some ${entities.ticket_type} tickets.`);
+      });
+
       app.addDialogs(mainDialog, childDialog);
+      app.addNLPModels(mainNLP, childNLP);
+      await app.save();
     });
 
 
