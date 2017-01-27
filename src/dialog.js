@@ -1,14 +1,18 @@
-export default class Dialog {
+//import log from './log';
 
-  constructor(name, nlpModelName) {
+export class Dialog {
+
+  constructor(name) {
     this.name = name;
-    this.nlpModelName = nlpModelName;
+    this._nlpModelName = null;
     this.startHandler = null;
-    this.intentHandlers = [];
-    this.resultHandlers = []; 
-    this.defaultHandler = [];
+    this.intentHandlers = {};
+    this.resultHandlers = {};
+    this.defaultHandler = null;
   }
 
+  get nlpModelName() { return this._nlpModelName; }
+  set nlpModelName(value) { this._nlpModelName = value; }
   /**
    * onStart - description
    *
@@ -25,7 +29,7 @@ export default class Dialog {
    * @param  {function} fn  fn(session, entities, message) => boolean (true if pattern was handled
    */
   onIntent(intent, fn) {
-    this.intentHandlers.push(intent, fn);
+    this.intentHandlers[intent] = fn;
   }
 
   /**
@@ -36,7 +40,7 @@ export default class Dialog {
    * @param  {type} fn      fn(session, result)
    */
   onResult(dialog, tag, fn) {
-    this.resultHandlers.push([dialog, tag], fn);
+    this.resultHandlers[[dialog, tag]] = fn;
   }
 
   /**
@@ -47,6 +51,21 @@ export default class Dialog {
    */
   onDefault(fn) {
     this.defaultHandler.push(fn);
+  }
+
+  toObject() {
+    var patterns = [
+      ...Object.keys(this.intentHandlers).map(i=>({intent: i})),
+      ...Object.keys(this.resultHandlers).map(r=>({result: r})),
+    ];
+
+    return {
+      name: this.name,
+      nlpModelName: this.nlpModelName,
+      //startHandler: this.startHandler,
+      patterns: patterns
+      //defaultHandler: this.defaultHandler
+    };
   }
 }
 

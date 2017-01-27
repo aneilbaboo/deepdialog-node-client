@@ -10,7 +10,7 @@ const StartFrameOp =
     id
     globals
     stack(limit: 1) { id locals }
-  } 
+  }
 }`;
 
 const EndFrameOp =
@@ -26,7 +26,7 @@ const SendResponseOp =
   sessionSendResponse(id: $id, text: $text)
 }`;
 
-export default class Session {
+export class Session {
   constructor(client, {id, globals, currentFrame}) {
     this.id = id;
     this.currentFrame = currentFrame;
