@@ -1,3 +1,6 @@
+import assert from 'assert';
+
+import {Client} from './client';
 
 const UpdateOp =
 `mutation {
@@ -28,25 +31,37 @@ const SendResponseOp =
 
 export class Session {
   constructor(client, {id, globals, currentFrame}) {
-    this.id = id;
-    this.currentFrame = currentFrame;
-    this.globals = globals;
+    assert(client instanceof Client);
+    assert(id);
+    assert(globals);
+    assert(currentFrame);
+    this._id = id;
+    this._currentFrame = currentFrame;
+    this._globals = globals;
     this.locked = false;
   }
 
-  get locals() { return this.currentFrame.locals; }
-  get dialog() { return this.currentFrame.dialog; }
-  get tag() { return this.currentFrame.tag; }
+  get id() { return this._id; }
+  get globals() { return this._globals; }
+  get locals() { return this._currentFrame.locals; }
+  get dialog() { return this._currentFrame.dialog; }
+  get tag() { return this._currentFrame.tag; }
 
   get(variable) {
     return this.locals[variable] || this.globals[variable];
   }
 
   set(variable, value) {
-    if (variable[0]==variable[0].toUpperCase()) {
-      this.globals[variable] = value;
+    if (variable instanceof Object) {
+      for (let k in variable) {
+        this.set(k, variable[k]);
+      }
     } else {
-      this.locals[variable] = value;
+      if (variable[0]==variable[0].toUpperCase()) {
+        this.globals[variable] = value;
+      } else {
+        this.locals[variable] = value;
+      }
     }
   }
 
