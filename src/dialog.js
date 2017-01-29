@@ -1,9 +1,12 @@
-//import log from './log';
+import {isString, isFunction} from 'util';
+import assert from 'assert';
 
-export class Dialog {
+export default class Dialog {
 
   constructor(name) {
     this.name = name;
+    assert(typeof(name)=='string', 'Dialog name must be a string');
+    
     this._nlpModelName = null;
     this.startHandler = null;
     this.intentHandlers = {};
@@ -19,6 +22,8 @@ export class Dialog {
    * @param  {function} fn fn(session)
    */
   onStart(fn) {
+    assert(isFunction(fn), 'handler must be a function');
+
     this.startHandler = fn;
   }
 
@@ -29,7 +34,14 @@ export class Dialog {
    * @param  {function} fn  fn(session, entities, message) => boolean (true if pattern was handled
    */
   onIntent(intent, fn) {
+    assert(isString(intent), 'intent must be a string');
+    assert(isFunction(fn), 'handler must be a function');
+
     this.intentHandlers[intent] = fn;
+  }
+
+  getIntentHandler(pattern) {
+    return this.intentHandlers[pattern];
   }
 
   /**
@@ -40,7 +52,20 @@ export class Dialog {
    * @param  {type} fn      fn(session, result)
    */
   onResult(dialog, tag, fn) {
-    this.resultHandlers[[dialog, tag]] = fn;
+    if (fn===undefined) {
+      fn = tag;
+      tag = null;
+    }
+    tag = tag || "#NULL#";
+    assert(isString(dialog), 'dialog must be a string');
+    assert(isString(tag), 'tag must be a string');
+    assert(isFunction(fn), 'handler must be a function');
+
+    this.resultHandlers[resultHandlerKey(dialog, tag)] = fn;
+  }
+
+  getResultHandler(dialog, tag) {
+    return this.resultHandlers[resultHandlerKey(dialog, tag)];
   }
 
   /**
@@ -50,23 +75,40 @@ export class Dialog {
    * @return {type}    description
    */
   onDefault(fn) {
-    this.defaultHandler.push(fn);
+    assert(isFunction(fn), 'handler must be a function');
+
+    this.defaultHandler = fn;
   }
 
   toObject() {
-    var patterns = [
-      ...Object.keys(this.intentHandlers).map(i=>({intent: i})),
-      ...Object.keys(this.resultHandlers).map(r=>({result: r})),
-    ];
+    var resultHandlerValues = Object.keys(this.resultHandlers).map(function (k) {
+      var [dialog, tag] = parseResultHandlerKey(k);
+      return {dialog: dialog, tag: tag};
+    });
+
+    var nlpInputHandlerValues = Object.keys(this.intentHandlers).map(i=>({intent: i}));
 
     return {
       name: this.name,
       nlpModelName: this.nlpModelName,
-      //startHandler: this.startHandler,
-      patterns: patterns
-      //defaultHandler: this.defaultHandler
+      startHandler: !!this.startHandler,
+      resultHandlers: resultHandlerValues,
+      nlpInputHandlers: nlpInputHandlerValues,
+      defaultHandler: !!this.defaultHandler
     };
   }
+}
+
+function resultHandlerKey(dialog, tag) {
+  if (tag) {
+    return `${dialog}|${tag}`;
+  } else {
+    return dialog;
+  }
+}
+
+function parseResultHandlerKey(key) {
+  return key.split('|');
 }
 
 // import

@@ -1,14 +1,16 @@
 import {expect} from 'chai';
 
-import {Session, Client} from '..';
+import {Session, App, Dialog,log} from '..';
 
 describe('Session', function () {
   context('Constructor', function () {
     var session;
-    var client;
+    var app;
     before(function() {
-      client = new Client();
-      session = new Session(client, {
+      app = new App({});
+      app.addDialogs(new Dialog('theDialog'));
+      log.info('app: %j', app);
+      session = new Session(app, {
         id: 'session-id',
         globals: { Global: 1},
         currentFrame: {
@@ -28,7 +30,9 @@ describe('Session', function () {
     });
 
     it('should set dialog', function () {
-      expect(session.dialog).to.equal('theDialog');
+      expect(session.dialogName).to.equal('theDialog');
+      expect(session.dialog).to.be.an.instanceof(Dialog);
+      expect(session.dialog.name).to.equal('theDialog');
     });
 
     it('should set tag', function () {
@@ -40,19 +44,19 @@ describe('Session', function () {
     });
 
     it('should fail if id is missing', function () {
-      expect(()=>{ new Session(client, {globals:{}, currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session(app, {globals:{}, currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if id is missing', function () {
-      expect(()=>{ new Session(client, {globals:{}, currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session(app, {globals:{}, currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if globals is missing', function () {
-      expect(()=>{ new Session(client, {id:'123', currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session(app, {id:'123', currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if currentFrame is missing', function () {
-      expect(()=>{ new Session(client, {id: '123', globals:{}}); }).to.throw(Error);
+      expect(()=>{ new Session(app, {id: '123', globals:{}}); }).to.throw(Error);
     });
 
     it('should fail if client is not a Client instance', function () {
@@ -63,8 +67,8 @@ describe('Session', function () {
   context('variables', function () {
     var session;
     beforeEach(function() {
-      var client = new Client();
-      session = new Session(client, {
+      var app = new App({});
+      session = new Session(app, {
         id: 'session-id',
         globals: { Global: 1},
         currentFrame: {

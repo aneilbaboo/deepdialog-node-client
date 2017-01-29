@@ -1,7 +1,8 @@
-import {Client} from './client';
-import {AppServer} from './appserver';
-import {Dialog} from './dialog';
-import {NLPModel} from './nlpModel';
+import Client from './client';
+import AppServer from './app-server';
+import Dialog from './dialog';
+import NLPModel from './nlp-model';
+import Session from './session';
 
 import log from './log';
 
@@ -9,13 +10,13 @@ const AppUpdateOp = `($dialogs: [DialogInput], $nlpModels: [NLPModelInput], $mai
   appUpdate(dialogs: $dialogs, nlpModels: $nlpModels, mainDialog: $mainDialog, webhook: $webhook) {
     id
     mainDialog
-    dialogs { name nlpModelName patterns { intent }}
+    dialogs { name  nlpModelName startHandler defaultHandler resultHandlers { dialog tag } nlpInputHandlers { intent }}
     nlpModels { name accessId accessToken }
     webhook
   }
 }`;
 
-export class App {
+export default class App {
   constructor({appId, appSecret}) {
     this._client = new Client(appId, appSecret);
     this.mainDialog = null;
@@ -99,10 +100,10 @@ export class App {
 
 
   /**
-   * async - description
-   *
-   * @return {type}  description
-   */
+  * async - description
+  *
+  * @return {type}  description
+  */
   async save() {
     var variables = {
       dialogs: this.dialogs.map(d=>d.toObject()),
@@ -115,8 +116,114 @@ export class App {
 
   }
 
-  server() {
-    return new AppServer(this);
+  get server() {
+    if (!this._server) {
+      this._server = new AppServer(this);
+    }
+    return this._server;
+  }
+
+  //
+  // Notification handling
+  //
+
+  async handleNotification(notification) {
+    var promises = [];
+    var appHandler = this._eventHandlers[event];
+    var event = notification.event;
+
+    if (appHandler) {
+      promises.push(appHandler);
+    }
+
+    if (event.startsWith('frame_')) {
+      promises.push(this.handleFrameEvent(notification));
+    }
+
+    await Promise.all(promises);
+  }
+
+
+  async handleFrameEvent(notification) {
+    var session = this.sessionFromNotificationData(notification.session);
+    var event = notification.event;
+
+    switch (event) {
+      case 'frame_start':
+        await this.handleFrameStart(session, notification);
+        break;
+
+      case 'frame_result':
+        await this.handleFrameResult(session, notification);
+        break;
+
+      case 'frame_input':
+        await this.handleFrameInput(session, notification);
+        break;
+
+      case 'frame_default':
+        await this.handleFrameDefault(session, notification);
+        break;
+    }
+  }
+
+  async handleFrameStart(session, notification) {
+    var dialog = session.dialog;
+
+    if (dialog.startHandler) {
+      await Promise.resolve(dialog.startHandler(session, notification));
+    } else {
+      log.warn('Couldn\'t find start handler for dialog %s', dialog.name);
+    }
+  }
+
+  async handleFrameInput(session, notification) {
+    var dialog = session.dialog;
+    var data = notification.data;
+
+    if (data.intent) {
+      var intent = notification.data.intent;
+      var entities = notification.data.entities;
+      var intentHandler = dialog.getIntentHandler(intent);
+      if (intentHandler) {
+        await Promise.resolve(intentHandler(session, entities, notification));
+        return;
+      }
+    }
+    log.warn('Dialog %s received intent %s, but no handler found', dialog.name, intent);
+  }
+
+  async handleFrameResult(session, notification) {
+    log.info("handleFrameResult 1");
+    var dialog = session.dialog;
+    var completedFrame = notification.session.completedFrame[0];
+    var resultHandler = dialog.getResultHandler(completedFrame.dialog, completedFrame.tag);
+    log.info("handleFrameResult 2");
+    if (resultHandler) {
+      await Promise.resolve(resultHandler(session, completedFrame.result, notification));
+    } else {
+      log.error('Couldn\'t find result handler for %s.%s in dialog %s',
+      completedFrame.dialog, completedFrame.tag, dialog.name);
+    }
+  }
+
+  async handleFrameDefault(session, notification) {
+    var dialog = session.dialog;
+
+    if (dialog.defaultHandler) {
+      await Promise.resolve(dialog.defaultHandler(session, notification));
+    } else {
+      log.warn('Couldn\t find default handler for dialog %s', dialog.name);
+    }
+  }
+
+  sessionFromNotificationData(data) {
+    var frame = data.stack[0];
+    return new Session(this, {
+      id: data.id,
+      globals: data.globals,
+      currentFrame: frame
+    });
   }
 
 }

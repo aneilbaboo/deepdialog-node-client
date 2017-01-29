@@ -4,4 +4,8 @@ export function isLocalName(name) {
     case 2: return false;
     default: throw new Error(`Invalid name: ${name}`);
   }
-} 
+}
+
+export function sleep(duration) {
+  return new Promise((resolve) => setTimeout(resolve, duration));
+}

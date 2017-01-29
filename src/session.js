@@ -1,7 +1,5 @@
 import assert from 'assert';
 
-import {Client} from './client';
-
 const UpdateOp =
 `mutation {
   sessionUpdate(id: $id, locals: $locals, globals: $globals) { }
@@ -29,22 +27,25 @@ const SendResponseOp =
   sessionSendResponse(id: $id, text: $text)
 }`;
 
-export class Session {
-  constructor(client, {id, globals, currentFrame}) {
-    assert(client instanceof Client);
-    assert(id);
-    assert(globals);
-    assert(currentFrame);
+export default class Session {
+  constructor(app, {id, globals, currentFrame}) {
+    assert(app && app.__proto__ && app.__proto__.constructor.name=='App', 'app must be an App instance', app);
+    assert(id, 'id (session.id)');
+    assert(globals, 'globals');
+    assert(currentFrame, 'currentFrame');
+    this._app = app;
     this._id = id;
     this._currentFrame = currentFrame;
     this._globals = globals;
     this.locked = false;
   }
 
+  get app() { return this._app; }
   get id() { return this._id; }
   get globals() { return this._globals; }
   get locals() { return this._currentFrame.locals; }
-  get dialog() { return this._currentFrame.dialog; }
+  get dialogName() { return this._currentFrame.dialog; }
+  get dialog() { return this.app.getDialog(this._currentFrame.dialog); }
   get tag() { return this._currentFrame.tag; }
 
   get(variable) {

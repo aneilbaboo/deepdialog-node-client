@@ -1,4 +1,4 @@
-export class NLPModel {
+export default class NLPModel {
   constructor ({name, provider, accessId, accessToken}) {
     this.name = name;
     this.provider = provider;
