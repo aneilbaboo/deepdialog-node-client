@@ -6,21 +6,36 @@ import {App, Session, Dialog, NLPModel, Client, log} from '..';
 
 dotEnv.load();
 
-async function queryApp() {
+async function query(op, vars) {
   // check app data
   var client = new Client(
     process.env.DEEPDIALOG_TEST_APPID,
     process.env.DEEPDIALOG_TEST_APPSECRET
   );
 
-  var app = await client.query(`{
+  var result = await client.query(op, vars);
+  return result;
+}
+
+async function queryApp() {
+  // check app data
+  return await query(`{
     app {
       id accessToken webhook mainDialog
       dialogs { name startHandler resultHandlers { dialog tag } defaultHandler nlpInputHandlers { intent } nlpModelName }
       nlpModels { name provider accessId accessToken }
     }
   }`);
-  return app;
+}
+
+async function queryEndpointConfiguration(endpointType, appKeyId) {
+  return await query(`($id: String) {
+    app {
+      endpointConfigurations(id: $id) {
+        endpointType appKeyId appKeySecret webhookSecret
+      }
+    }
+  }`, {endpointType: endpointType, appKeyId: appKeyId});
 }
 
 async function postJSON(webhook, data) {
@@ -32,17 +47,6 @@ async function postJSON(webhook, data) {
   };
 
   var result = await rp(options);
-  // .catch(rpErrors.StatusCodeError, function (error) {
-  //   log.error("StatusCodeError during App %s notifyClient: %j", app.get('id'), error);
-  //   let error1 = new WebhookFailedError(`HTTP Error while calling ${webhook}: ${error.message} (App ${app.get('id')})`,
-  //   error.statusCode);
-  //   throw error1;
-  // })
-  // .catch(rpErrors.RequestError, function (error) {
-  //   log.error("RequestError during App %s notifyClient: %j", app.get('id'), error);
-  //   let error2 = new WebhookFailedError(`Failure during webhook ${webhook} ${error.message} (App ${app.get('id')})`);
-  //   throw error2;
-  // });
 
   return JSON.parse(result);
 }
@@ -186,6 +190,62 @@ describe('Feature test', function () {
       });
     });
 
+  });
+
+  context('endpoints', function () {
+    it('endpointConfigurationUpdate updates the endpoint', async function () {
+      var app = new App({
+        appId: process.env.DEEPDIALOG_TEST_APPID,
+        appSecret: process.env.DEEPDIALOG_TEST_APPSECRET
+      });
+
+      await app.endpointConfigurationUpdate({
+        endpointType: 'smooch',
+        appKeyId: 'appKeyId1',
+        appKeySecret: 'appKeySecret1',
+        webhookSecret: 'webhookSecret1'
+      });
+
+      var result = await queryEndpointConfiguration('smooch', 'appKeyId1');
+
+      expect(result.endpointType).to.equal('smooch');
+      expect(result.appKeyId).to.equal('appKeyId1');
+      expect(result.appKeySecret1).to.equal('appKeySecret1');
+      expect(result.webhookSecret).to.equal('webhookSecret1');
+
+      await app.endpointConfigurationUpdate({
+        endpointType: 'smooch',
+        appKeyId: 'appKeyId1',
+        appKeySecret: 'appKeySecret2',
+        webhookSecret: 'webhookSecret2'
+      });
+
+      var result2 = await queryEndpointConfiguration('smooch', 'appKeyId1');
+
+      expect(result2.endpointType).to.equal('smooch');
+      expect(result2.appKeyId).to.equal('appKeyId1');
+      expect(result2.appKeySecret1).to.equal('appKeySecret2');
+      expect(result2.webhookSecret).to.equal('webhookSecret2');
+    });
+
+    it('endpointConfigurationDelete deletes the endpoint', async function () {
+      var app = new App({
+        appId: process.env.DEEPDIALOG_TEST_APPID,
+        appSecret: process.env.DEEPDIALOG_TEST_APPSECRET
+      });
+
+      var config = await app.endpointConfigurationUpdate({
+        endpointType: 'smooch',
+        appKeyId: 'appKeyId1',
+        appKeySecret: 'appKeySecret1',
+        webhookSecret: 'webhookSecret1'
+      });
+
+      await app.endpointConfigurationDelete(config.id);
+
+      expect(app.endpointConfigurationGet('smooch'));
+
+    });
   });
 
   context('events', function () {
@@ -351,7 +411,6 @@ describe('Feature test', function () {
       });
 
       app.server.stop();
-
 
       expect(session).to.be.an.instanceof(Session);
       expect(session.id).to.equal('session-id');
