@@ -175,6 +175,12 @@ export default class App {
   }
 
 
+  /**
+   * App#handleFrameEvent - Top level frame event handler which delegates
+   *                        to specific frame_* event handlers
+   *
+   * @param  {Object} notification description
+   */
   async handleFrameEvent(notification) {
     var session = this.sessionFromNotificationData(notification.session);
     var event = notification.event;
@@ -202,7 +208,7 @@ export default class App {
     var dialog = session.dialog;
 
     if (dialog.startHandler) {
-      await Promise.resolve(dialog.startHandler(session, notification));
+      await Promise.resolve(dialog.startHandler(session, session.locals, notification));
     } else {
       log.warn('Couldn\'t find start handler for dialog %s', dialog.name);
     }
