@@ -1,15 +1,17 @@
-import {isString, isFunction} from 'util';
+import {isString, isFunction, isObject} from 'util';
 import assert from 'assert';
+
+import {any} from './constants';
 
 export default class Dialog {
 
   constructor(name) {
     this.name = name;
     assert(typeof(name)=='string', 'Dialog name must be a string');
-    
+
     this._nlpModelName = null;
     this.startHandler = null;
-    this.intentHandlers = {};
+    this.inputHandlers = [];
     this.resultHandlers = {};
     this.defaultHandler = null;
   }
@@ -27,6 +29,18 @@ export default class Dialog {
     this.startHandler = fn;
   }
 
+
+  /**
+   * onPostback - description
+   *
+   * @param  {type} payload description
+   * @param  {type} fn      description
+   * @return {type}         description
+   */
+  onPostback(payload, fn) {
+    return this.onInput({payload: payload}, fn);
+  }
+
   /**
    * onIntent - description
    *
@@ -34,14 +48,71 @@ export default class Dialog {
    * @param  {function} fn  fn(session, entities, message) => boolean (true if pattern was handled
    */
   onIntent(intent, fn) {
-    assert(isString(intent), 'intent must be a string');
-    assert(isFunction(fn), 'handler must be a function');
-
-    this.intentHandlers[intent] = fn;
+    return this.onInput({intent: intent}, fn, (d)=>d.entities);
   }
 
-  getIntentHandler(pattern) {
-    return this.intentHandlers[pattern];
+
+  /**
+   * onInput - low level function for matching arbitrary patterns in the data
+   *            component of a frame_input notification
+   *
+   * @param  {Object}   pattern       description
+   * @param  {Function} fn            description
+   * @param  {Function} dataExtractor description
+   */
+  onInput(pattern, fn, dataExtractor) {
+    if (isFunction(pattern)) {
+      dataExtractor = fn;
+      fn = pattern;
+      pattern = {};
+    }
+
+    if (!dataExtractor) {
+      dataExtractor = (d)=>d;
+    }
+
+    assert(isObject(pattern), 'pattern must be an object or null');
+    assert(isFunction(fn), 'handler must be a function');
+    assert(isFunction(dataExtractor), 'dataExtractor must be a function');
+
+    this.inputHandlers.push([pattern, fn, dataExtractor]);
+  }
+
+  /**
+   * getInputHandler
+   *
+   * @param  {type} inputData description
+   * @return {Array} [handler, extractor] two functions
+   */
+  getInputHandler(inputData) {
+    for (let [hpattern, hfn, hextractor]  of this.inputHandlers) {
+      if (Dialog.matchesPattern(hpattern, inputData)) {
+        return [hfn, hextractor];
+      }
+    }
+  }
+
+  /**
+   * matchesPattern - true only if all pattern key/value pairs are found in data
+   *
+   * @param  {Object} pattern description
+   * @param  {Object} data    description
+   * @return {boolean}         description
+   */
+  static matchesPattern(pattern, data) {
+    for (let k in pattern) {
+      let pval = pattern[k];
+      if (isFunction(pval)) {
+        if (!pval(data[k])) {
+          return false;
+        }
+      } else {
+        if (pattern[k]!=data[k]) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -86,14 +157,18 @@ export default class Dialog {
       return {dialog: dialog, tag: tag};
     });
 
-    var nlpInputHandlerValues = Object.keys(this.intentHandlers).map(i=>({intent: i}));
+    function extractPattern(h) {
+      return isFunction(h[0]) ? any : h[0];
+    }
+
+    var inputHandlerPatterns = this.inputHandlers.map(extractPattern);
 
     return {
       name: this.name,
       nlpModelName: this.nlpModelName,
       startHandler: !!this.startHandler,
       resultHandlers: resultHandlerValues,
-      nlpInputHandlers: nlpInputHandlerValues,
+      inputHandlers: inputHandlerPatterns,
       defaultHandler: !!this.defaultHandler
     };
   }

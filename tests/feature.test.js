@@ -22,8 +22,11 @@ async function queryApp() {
   return await query(`{
     app {
       id accessToken webhook mainDialog
-      dialogs { name startHandler resultHandlers { dialog tag } defaultHandler nlpInputHandlers { intent } nlpModelName }
+      dialogs { name startHandler resultHandlers { dialog tag }
+                inputHandlers
+                nlpModelName }
       nlpModels { name provider accessId accessToken }
+      defaultHandler
     }
   }`);
 }
@@ -162,7 +165,7 @@ describe('Feature test', function () {
         name: 'MainDialog', nlpModelName: 'mainNLP',
         startHandler: true,
         resultHandlers: [{dialog:'ChildDialog', tag: 'result_tag'}],
-        nlpInputHandlers: [{ intent: 'hello' }, { intent: 'hello2'}],
+        inputHandlers: [{ intent: 'hello' }, { intent: 'hello2'}],
         defaultHandler: true
       });
 
@@ -171,7 +174,7 @@ describe('Feature test', function () {
         startHandler: false,
         defaultHandler: false,
         resultHandlers: [],
-        nlpInputHandlers: [{ intent: 'buy_tickets' }]
+        inputHandlers: [{ intent: 'buy_tickets' }]
       });
 
       var n1, n2;

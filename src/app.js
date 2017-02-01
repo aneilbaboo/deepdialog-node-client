@@ -6,16 +6,6 @@ import Session from './session';
 
 import log from './log';
 
-const AppUpdateOp = `($dialogs: [DialogInput], $nlpModels: [NLPModelInput], $mainDialog: String, $webhook: String) {
-  appUpdate(dialogs: $dialogs, nlpModels: $nlpModels, mainDialog: $mainDialog, webhook: $webhook) {
-    id
-    mainDialog
-    dialogs { name  nlpModelName startHandler defaultHandler resultHandlers { dialog tag } nlpInputHandlers { intent }}
-    nlpModels { name accessId accessToken }
-    webhook
-  }
-}`;
-
 export default class App {
   constructor({appId, appSecret}) {
     this._client = new Client(appId, appSecret);
@@ -100,7 +90,7 @@ export default class App {
 
 
   /**
-  * async - description
+  * save - description
   *
   * @return {type}  description
   */
@@ -111,9 +101,20 @@ export default class App {
       mainDialog: this.mainDialog,
       webhook: this.webhook
     };
-    log.info("SAVE APP VARIABLES %j", variables);
-    await this.client.mutate(AppUpdateOp, variables);
 
+    await this.client.mutate(`($dialogs: [DialogInput], $nlpModels: [NLPModelInput],
+      $mainDialog: String, $webhook: String) {
+        appUpdate(dialogs: $dialogs, nlpModels: $nlpModels,
+          mainDialog: $mainDialog, webhook: $webhook) {
+            id
+            mainDialog
+            dialogs { name  nlpModelName startHandler defaultHandler
+              resultHandlers { dialog tag } inputHandlers }
+              nlpModels { name accessId accessToken }
+              webhook
+            }
+          }`,
+          variables);
   }
 
   get server() {
@@ -121,6 +122,36 @@ export default class App {
       this._server = new AppServer(this);
     }
     return this._server;
+  }
+
+  //
+  // Endpoint configuration
+  //
+
+  async endpointConfigurationGet({endpointType, appKeyId}) {
+    var variables = {
+      endpointType: endpointType,
+      appKeyId: appKeyId
+    };
+    await this.client.mutate(endpointConfigurationGetOp, variables);
+  }
+
+  async endpointConfigurationUpdate({endpointType, appKeyId, appKeySecret, webhookSecret}) {
+    var variables = {
+      endpointType: endpointType,
+      appKeyId: appKeyId,
+      appKeySecret: appKeySecret,
+      webhookSecret: webhookSecret
+    };
+    return await this.client.mutate(endpointConfigurationUpdateOp, variables);
+  }
+
+  async endpointConfigurationDelete({endpointType, appKeyId}) {
+    var variables = {
+      endpointType: endpointType,
+      appKeyId: appKeyId
+    };
+    await this.client.mutate(endpointConfigurationDeleteOp, variables);
   }
 
   //
@@ -181,16 +212,12 @@ export default class App {
     var dialog = session.dialog;
     var data = notification.data;
 
-    if (data.intent) {
-      var intent = notification.data.intent;
-      var entities = notification.data.entities;
-      var intentHandler = dialog.getIntentHandler(intent);
-      if (intentHandler) {
-        await Promise.resolve(intentHandler(session, entities, notification));
-        return;
-      }
+    var [inputHandler, extractor] = dialog.getInputHandler(data);
+    if (inputHandler) {
+      await Promise.resolve(intentHandler(session, extractor(data), notification));
+    } else {
+      log.warn('Dialog %s received intent %s, but no handler found', dialog.name, intent);
     }
-    log.warn('Dialog %s received intent %s, but no handler found', dialog.name, intent);
   }
 
   async handleFrameResult(session, notification) {
