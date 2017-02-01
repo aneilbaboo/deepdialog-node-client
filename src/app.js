@@ -7,8 +7,8 @@ import Session from './session';
 import log from './log';
 
 export default class App {
-  constructor({appId, appSecret}) {
-    this._client = new Client(appId, appSecret);
+  constructor({appId, appSecret, serverURL}) {
+    this._client = new Client(appId, appSecret, serverURL);
     this.mainDialog = null;
     this._dialogs = {};
     this._nlpModels = {};

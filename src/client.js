@@ -1,11 +1,12 @@
 import {Lokka} from 'lokka';
 import {Transport} from 'lokka-transport-http';
 
-const GraphQLAPIURL = 'http://localhost:3000/graphql'; //'http://apistaging.deepdialog.ai/graphql';
+const GraphQLAPIURL = 'http://apistaging.deepdialog.ai/graphql';
 
 
 export default class Client {
-  constructor(appId, appSecret) {
+  constructor(appId, appSecret, serverURL) {
+    serverURL = serverURL || GraphQLAPIURL;
     this.appId = appId;
     this.appSecret = appSecret;
     var headers = {
@@ -13,7 +14,7 @@ export default class Client {
     };
 
     this.client = new Lokka({
-      transport: new Transport(GraphQLAPIURL, { headers: headers })
+      transport: new Transport(serverURL, { headers: headers })
     });
   }
 
