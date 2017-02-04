@@ -69,29 +69,39 @@ export default class Session {
   async start({dialog, tag, locals}) {
     this.checkLock();
 
-    await this.client.mutate(StartFrameOp, {
-      sessionId: this.id,
-      parentFrameId: this.frameId,
-      dialog: dialog,
-      tag: tag,
-      locals: locals,
-      globals: this.globals
-    });
-
     this.locked = true;
+    try {
+      await this.client.mutate(StartFrameOp, {
+        sessionId: this.id,
+        parentFrameId: this.frameId,
+        dialog: dialog,
+        tag: tag,
+        locals: locals,
+        globals: this.globals
+      });
+    } catch (e) {
+      this.locked = false;
+      throw e;
+    }
   }
 
   async finish(result) {
     this.checkLock();
 
-    await this.client.mutate(EndFrameOp, {
-      sessionId: this.id,
-      frameId: this.frameId,
-      result: result,
-      suppressNotification: true
-    });
-
     this.locked = true;
+    try {
+      await this.client.mutate(EndFrameOp, {
+        sessionId: this.id,
+        frameId: this.frameId,
+        result: result,
+        suppressNotification: true
+      });
+    } catch (e) {
+      this.locked = false;
+      throw e;
+    }
+
+
   }
 
   async save() {
