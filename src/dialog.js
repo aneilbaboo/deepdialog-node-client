@@ -1,8 +1,7 @@
 import {isString, isFunction, isObject} from 'util';
 import assert from 'assert';
 
-import {any} from './constants';
-
+import {any} from './constants'
 export default class Dialog {
 
   constructor(name) {
@@ -29,12 +28,19 @@ export default class Dialog {
     this.startHandler = fn;
   }
 
+  //
+  // Input Handlers
+  //
+
+  onText(text, fn) {
+    return this.onInput({text: text}, fn, (n)=>n.data.text);
+  }
 
   /**
-   * onPostback - description
+   * onPostback - handles a postback
    *
-   * @param  {type} payload description
-   * @param  {type} fn      description
+   * @param  {string}   payload description
+   * @param  {Function} fn      description
    * @return {type}         description
    */
   onPostback(payload, fn) {
@@ -48,9 +54,8 @@ export default class Dialog {
    * @param  {function} fn  fn(session, entities, message) => boolean (true if pattern was handled
    */
   onIntent(intent, fn) {
-    return this.onInput({intent: intent}, fn, (d)=>d.entities);
+    return this.onInput({intent: intent}, fn, (n)=>n.data.entities);
   }
-
 
   /**
    * onInput - low level function for matching arbitrary patterns in the data

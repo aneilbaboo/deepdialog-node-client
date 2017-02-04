@@ -220,7 +220,7 @@ export default class App {
 
     var [inputHandler, extractor] = dialog.getInputHandler(data);
     if (inputHandler) {
-      await Promise.resolve(intentHandler(session, extractor(data), notification));
+      await Promise.resolve(intentHandler(session, extractor(notification), notification));
     } else {
       log.warn('Dialog %s received intent %s, but no handler found', dialog.name, intent);
     }
