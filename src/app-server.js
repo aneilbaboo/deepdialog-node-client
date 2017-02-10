@@ -17,7 +17,7 @@ export default class AppServer {
    * @param  {number} port description
    * @return {AppServer}      description
    */
-  async start(port) {
+  async start(port, fn) {
     if (this.server) {
       throw new Error(`Server already started`);
     }
@@ -32,6 +32,7 @@ export default class AppServer {
     while(!started) {
       await sleep(10);
     }
+    await Promise.resolve(fn(this.app));
 
     return this;
   }
