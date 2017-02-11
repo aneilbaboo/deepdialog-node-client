@@ -42,3 +42,4 @@ sandbox/*.*
 .env
 *.*#
 gitstats
+lib/*
