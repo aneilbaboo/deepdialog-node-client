@@ -17,7 +17,7 @@
     "mocha": "--require scripts/mocha_runner tests/**/*.test.js"
   },
   "scripts": {
-    "prepublish": ". ./scripts/prepublish.sh",
+    "postinstall": ". ./scripts/prepublish.sh",
     "lint": "eslint ./src",
     "lintfix": "eslint ./src --fix",
     "testonly": "mocha $npm_package_options_mocha",
