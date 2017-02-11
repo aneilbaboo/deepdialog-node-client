@@ -3,7 +3,6 @@ import {Transport} from 'lokka-transport-http';
 
 const GraphQLAPIURL = 'http://apistaging.deepdialog.ai/graphql';
 
-
 export default class Client {
   constructor(appId, appSecret, serverURL) {
     serverURL = serverURL || GraphQLAPIURL;

@@ -24,6 +24,7 @@ export default class AppServer {
 
     var server = this.makeServer();
     var started = false;
+
     this.server = server.listen(port, function () {
       log.info('DeepDialog App server listening on port %s', port);
       started = true;
@@ -32,6 +33,7 @@ export default class AppServer {
     while(!started) {
       await sleep(10);
     }
+
     await Promise.resolve(fn(this.app));
 
     return this;
