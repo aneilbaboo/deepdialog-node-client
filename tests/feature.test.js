@@ -26,7 +26,6 @@ async function queryApp() {
                 inputHandlers
                 nlpModelName }
       nlpModels { name provider accessId accessToken }
-      defaultHandler
     }
   }`);
 }
@@ -71,7 +70,6 @@ describe('Feature test', function () {
       app.nlpModels = [];
       app.resultHandlers = [];
       app.startHandler = null;
-      app.defaultHandler = null;
       app.mainDialog = '';
       app.domain = null;
       app.https = false;
@@ -128,7 +126,7 @@ describe('Feature test', function () {
         await session.respond(`The result from ChildDialog is ${JSON.stringify(result)}`);
       });
 
-      mainDialog.onDefault(async function(session) { // eslint-disable-line
+      mainDialog.onRecovery(async function(session) { // eslint-disable-line
       });
 
       childDialog = new Dialog('ChildDialog');
@@ -165,14 +163,12 @@ describe('Feature test', function () {
         name: 'MainDialog', nlpModelName: 'mainNLP',
         startHandler: true,
         resultHandlers: [{dialog:'ChildDialog', tag: 'result_tag'}],
-        inputHandlers: [{ intent: 'hello' }, { intent: 'hello2'}],
-        defaultHandler: true
+        inputHandlers: [{ intent: 'hello' }, { intent: 'hello2'}, {recovery: true}]
       });
 
       expect(d2).to.deep.equal({
         name: 'ChildDialog', nlpModelName: 'childNLP',
         startHandler: false,
-        defaultHandler: false,
         resultHandlers: [],
         inputHandlers: [{ intent: 'buy_tickets' }]
       });

@@ -1,3 +1,5 @@
+import url from 'url';
+
 import Client from './client';
 import AppServer from './app-server';
 import Dialog from './dialog';
@@ -7,11 +9,13 @@ import Session from './session';
 import log from './log';
 
 export default class App {
-  constructor({appId, appSecret, serverURL}) {
-    this._client = new Client(appId, appSecret, serverURL);
+  constructor({appId, appSecret, webhook, deepDialogServer}) {
+    var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
+    this._client = new Client(appId, appSecret, ddGraphQLURL);
     this.mainDialog = null;
     this._dialogs = {};
     this._nlpModels = {};
+    this._webhook = webhook;
     this._eventHandlers = {};
     this.https = true;
   }
@@ -19,13 +23,7 @@ export default class App {
   get domain() { return this._domain;  }
   set domain(value) { this._domain = value; }
 
-  get webhook() {
-    if (this.domain) {
-      return `${this.https ? 'https' : 'http' }://${this.domain}/`;
-    } else {
-      return '';
-    }
-  }
+  get webhook() { return this._webhook; }
 
   get client() { return this._client; }
 
@@ -102,13 +100,15 @@ export default class App {
       webhook: this.webhook
     };
 
+    log.debug('Saving app %j', variables);
+
     await this.client.mutate(`($dialogs: [DialogInput], $nlpModels: [NLPModelInput],
       $mainDialog: String, $webhook: String) {
         appUpdate(dialogs: $dialogs, nlpModels: $nlpModels,
           mainDialog: $mainDialog, webhook: $webhook) {
             id
             mainDialog
-            dialogs { name  nlpModelName startHandler defaultHandler
+            dialogs { name  nlpModelName startHandler
               resultHandlers { dialog tag } inputHandlers }
               nlpModels { name accessId accessToken }
               webhook
@@ -122,36 +122,6 @@ export default class App {
       this._server = new AppServer(this);
     }
     return this._server;
-  }
-
-  //
-  // Endpoint configuration
-  //
-
-  async endpointConfigurationGet({endpointType, appKeyId}) {
-    var variables = {
-      endpointType: endpointType,
-      appKeyId: appKeyId
-    };
-    await this.client.mutate(endpointConfigurationGetOp, variables);
-  }
-
-  async endpointConfigurationUpdate({endpointType, appKeyId, appKeySecret, webhookSecret}) {
-    var variables = {
-      endpointType: endpointType,
-      appKeyId: appKeyId,
-      appKeySecret: appKeySecret,
-      webhookSecret: webhookSecret
-    };
-    return await this.client.mutate(endpointConfigurationUpdateOp, variables);
-  }
-
-  async endpointConfigurationDelete({endpointType, appKeyId}) {
-    var variables = {
-      endpointType: endpointType,
-      appKeyId: appKeyId
-    };
-    await this.client.mutate(endpointConfigurationDeleteOp, variables);
   }
 
   //
@@ -237,16 +207,6 @@ export default class App {
     } else {
       log.error('Couldn\'t find result handler for %s.%s in dialog %s',
       completedFrame.dialog, completedFrame.tag, dialog.name);
-    }
-  }
-
-  async handleFrameDefault(session, notification) {
-    var dialog = session.dialog;
-
-    if (dialog.defaultHandler) {
-      await Promise.resolve(dialog.defaultHandler(session, notification));
-    } else {
-      log.warn('Couldn\t find default handler for dialog %s', dialog.name);
     }
   }
 

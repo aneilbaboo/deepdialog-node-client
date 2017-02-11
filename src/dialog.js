@@ -4,15 +4,15 @@ import assert from 'assert';
 import {any} from './constants'
 export default class Dialog {
 
-  constructor(name) {
+  constructor({name, description}) {
     this.name = name;
+    this.description = description;
     assert(typeof(name)=='string', 'Dialog name must be a string');
 
     this._nlpModelName = null;
     this.startHandler = null;
     this.inputHandlers = [];
     this.resultHandlers = {};
-    this.defaultHandler = null;
   }
 
   get nlpModelName() { return this._nlpModelName; }
@@ -55,6 +55,17 @@ export default class Dialog {
    */
   onIntent(intent, fn) {
     return this.onInput({intent: intent}, fn, (n)=>n.data.entities);
+  }
+
+
+  /**
+   * onRecovery - a function which is run when no input handlers exist
+   *
+   * @param  {type} fn description
+   * @return {type}    description
+   */
+  onRecovery(fn) {
+    return this.onInput({recovery: true}, fn, (n)=>n);
   }
 
   /**
@@ -132,7 +143,7 @@ export default class Dialog {
       fn = tag;
       tag = null;
     }
-    tag = tag || "#NULL#";
+    tag = tag || "<{null}>";
     assert(isString(dialog), 'dialog must be a string');
     assert(isString(tag), 'tag must be a string');
     assert(isFunction(fn), 'handler must be a function');
@@ -150,10 +161,8 @@ export default class Dialog {
    * @param  {type} fn description
    * @return {type}    description
    */
-  onDefault(fn) {
+  onUnhandled(fn) {
     assert(isFunction(fn), 'handler must be a function');
-
-    this.defaultHandler = fn;
   }
 
   toObject() {
@@ -168,14 +177,16 @@ export default class Dialog {
 
     var inputHandlerPatterns = this.inputHandlers.map(extractPattern);
 
-    return {
+    var result = {
       name: this.name,
-      nlpModelName: this.nlpModelName,
       startHandler: !!this.startHandler,
-      resultHandlers: resultHandlerValues,
-      inputHandlers: inputHandlerPatterns,
-      defaultHandler: !!this.defaultHandler
+      resultHandlers: resultHandlerValues || [],
+      inputHandlers: inputHandlerPatterns || []
     };
+    if (this.nlpModelName) {
+      result.nlpModelName = this.nlpModelName;
+    }
+    return result;
   }
 }
 
