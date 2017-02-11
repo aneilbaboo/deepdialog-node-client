@@ -1,7 +1,7 @@
 import {isString, isFunction, isObject} from 'util';
 import assert from 'assert';
 
-import {any} from './constants'
+import {any} from './constants';
 export default class Dialog {
 
   constructor({name, description}) {
@@ -17,6 +17,7 @@ export default class Dialog {
 
   get nlpModelName() { return this._nlpModelName; }
   set nlpModelName(value) { this._nlpModelName = value; }
+
   /**
    * onStart - description
    *
@@ -32,6 +33,12 @@ export default class Dialog {
   // Input Handlers
   //
 
+  /**
+   * onText - handles an arbitrary text input (in future, regexes)
+   *
+   * @param  {type} text description
+   * @param  {type} fn   description
+   */
   onText(text, fn) {
     return this.onInput({text: text}, fn, (n)=>n.data.text);
   }
@@ -41,7 +48,6 @@ export default class Dialog {
    *
    * @param  {string}   payload description
    * @param  {Function} fn      description
-   * @return {type}         description
    */
   onPostback(payload, fn) {
     return this.onInput({payload: payload}, fn);
@@ -56,7 +62,6 @@ export default class Dialog {
   onIntent(intent, fn) {
     return this.onInput({intent: intent}, fn, (n)=>n.data.entities);
   }
-
 
   /**
    * onRecovery - a function which is run when no input handlers exist
