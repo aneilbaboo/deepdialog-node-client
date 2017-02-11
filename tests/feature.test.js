@@ -4,7 +4,7 @@ import rp from 'request-promise';
 
 import {App, Session, Dialog, NLPModel, Client, log} from '..';
 
-dotEnv.load();
+dotEnv.config();
 
 async function query(op, vars) {
   // check app data
