@@ -62,7 +62,7 @@ export default class AppServer {
     server.use(compression());
     server.use("/", router);
 
-    router.post('/', async function (req, res) {
+    router.post('/webhook', async function (req, res) {
       var notifications = req.body.notifications;
       if (notifications) {
         log.info('Processing notifications: %j', notifications);

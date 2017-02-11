@@ -9,13 +9,13 @@ import Session from './session';
 import log from './log';
 
 export default class App {
-  constructor({appId, appSecret, webhook, deepDialogServer}) {
+  constructor({appId, appSecret, hostURL, deepDialogServer}) {
     var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
     this._client = new Client(appId, appSecret, ddGraphQLURL);
     this.mainDialog = null;
     this._dialogs = {};
     this._nlpModels = {};
-    this._webhook = webhook;
+    this.hostURL = hostURL;
     this._eventHandlers = {};
     this.https = true;
   }
@@ -23,7 +23,9 @@ export default class App {
   get domain() { return this._domain;  }
   set domain(value) { this._domain = value; }
 
-  get webhook() { return this._webhook; }
+  get webhook() {
+    return url.resolve(this.hostURL,'webhook');
+  }
 
   get client() { return this._client; }
 
@@ -190,9 +192,9 @@ export default class App {
 
     var [inputHandler, extractor] = dialog.getInputHandler(data);
     if (inputHandler) {
-      await Promise.resolve(intentHandler(session, extractor(notification), notification));
+      await Promise.resolve(inputHandler(session, extractor(notification), notification));
     } else {
-      log.warn('Dialog %s received intent %s, but no handler found', dialog.name, intent);
+      log.warn('Dialog %s received %s, but no handler found', dialog.name, notification);
     }
   }
 
