@@ -70,7 +70,7 @@ export default class Dialog {
    * @return {type}    description
    */
   onRecovery(fn) {
-    return this.onInput({recovery: true}, fn, (n)=>n);
+    return this.onInput({recovery: true}, fn, (n)=>n.message);
   }
 
   /**
