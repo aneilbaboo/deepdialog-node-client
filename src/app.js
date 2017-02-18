@@ -9,12 +9,13 @@ import Session from './session';
 import log from './log';
 
 export default class App {
-  constructor({appId, appSecret, hostURL, deepDialogServer}) {
+  constructor({appId, appSecret, mainDialog, hostURL, deepDialogServer}) {
     var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
     this._client = new Client(appId, appSecret, ddGraphQLURL);
     this.mainDialog = null;
     this._dialogs = {};
     this._nlpModels = {};
+    this.mainDialog = mainDialog;
     this.hostURL = hostURL;
     this._eventHandlers = {};
     this.https = true;
