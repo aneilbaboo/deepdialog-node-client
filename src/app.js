@@ -155,7 +155,9 @@ export default class App {
    * @param  {Object} notification description
    */
   async handleFrameEvent(notification) {
-    var session = this.sessionFromNotificationData(notification.session);
+    log.silly('Handling notification: %j', notification);
+
+    var session = this.sessionFromNotificationData(notification);
     var event = notification.event;
 
     switch (event) {
@@ -214,11 +216,10 @@ export default class App {
   }
 
   sessionFromNotificationData(data) {
-    var frame = data.stack[0];
     return new Session(this, {
-      id: data.id,
-      globals: data.globals,
-      currentFrame: frame
+      id: data.session.id,
+      globals: data.session.globals,
+      currentFrame: data.matchedFrame
     });
   }
 
