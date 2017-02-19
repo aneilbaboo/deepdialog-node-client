@@ -107,7 +107,7 @@ export default class Session {
 
   async save() {
     this.checkLock();
-    await this.client.send(UpdateOp, {
+    await this.client.mutate(UpdateOp, {
       sessionId: this.id,
       globals: this.globals,
       locals: this.locals
@@ -116,7 +116,7 @@ export default class Session {
 
   async respond({text}) {
     this.checkLock();
-    await this.client.send(SendResponseOp, {
+    await this.client.mutate(SendResponseOp, {
       sessionId: this.id,
       text: text
     });
