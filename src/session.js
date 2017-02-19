@@ -41,6 +41,7 @@ export default class Session {
   }
 
   get app() { return this._app; }
+  get client() { return this._app.client; }
   get id() { return this._id; }
   get globals() { return this._globals; }
   get locals() { return this._currentFrame.locals; }
