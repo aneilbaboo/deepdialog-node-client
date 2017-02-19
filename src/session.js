@@ -23,7 +23,7 @@ const EndFrameOp =
 }`;
 
 const SendResponseOp =
-`($id: String, text: String) {
+`($id: String, $text: String) {
   sessionSendResponse(id: $id, text: $text)
 }`;
 
