@@ -30,7 +30,7 @@ const SendMessageOp =
     messageSend(sessionId: $sessionId, type: $type, text: $text,
       mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
       id sessionId endpointInfo { messageId endpointId senderId recipientId }
-      actions items
+      actions
     }
 }`;
 
