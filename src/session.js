@@ -25,10 +25,10 @@ const EndFrameOp =
 }`;
 
 const SendMessageOp =
-`($sessionId: String, $role: RoleType, $type: MessageType, $text: String,
-   $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $item: [MessageItemInput]) {
-    messageSend(sessionId: $sessionId, role: $role, type: $type, text: $text,
-      mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions) {
+`($sessionId: String, $type: MessageType, $text: String,
+   $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
+    messageSend(sessionId: $sessionId, type: $type, text: $text,
+      mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
       id sessionId endpointInfo { messageId endpointId senderId recipientId }
       actions items
     }
