@@ -1,30 +1,37 @@
 import assert from 'assert';
 
 const UpdateOp =
-`mutation {
-  sessionUpdate(id: $id, locals: $locals, globals: $globals) { }
+`($id: String, $locals: Object, $globals: Object) {
+  sessionUpdate(id: $id, locals: $locals, globals: $globals) {
+    id globals
+    stack(limit: 1) { id dialog tag locals }
+  }
 }`;
 
 const StartFrameOp =
 `($id: String, $dialog: String, $tag: String, $locals: Object, $globals: Object) {
   sessionStartFrame(id: $id, dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
-    id
-    globals
+    id globals
     stack(limit: 1) { id locals }
   }
 }`;
 
 const EndFrameOp =
-`($id: String, $result: Object) {
-  sessionEndFrame(id: $id, result: $result) {
-    id
+`($id: String, $result: Object, $globals: Object) {
+  sessionEndFrame(id: $id, result: $result, globals: $globals) {
+    id globals
     stack(limit: 1) { id dialog tag locals }
   }
 }`;
 
-const SendResponseOp =
-`($id: String, $text: String) {
-  sessionSendResponse(id: $id, text: $text)
+const SendMessageOp =
+`($sessionId: String, $role: RoleType, $type: MessageType, $text: String,
+   $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $item: [MessageItemInput]) {
+    messageSend(sessionId: $sessionId, role: $role, type: $type, text: $text,
+      mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions) {
+      id sessionId endpointInfo { messageId endpointId senderId recipientId }
+      actions items
+    }
 }`;
 
 export default class Session {
@@ -114,11 +121,26 @@ export default class Session {
     });
   }
 
-  async respond({text}) {
+  async send({text, mediaUrl, mediaType, type, actions, items}) {
     this.checkLock();
-    await this.client.mutate(SendResponseOp, {
+    if (!type) {
+      if (text) {
+        type = 'text';
+      } else if (mediaUrl) {
+        type = 'image';
+      } else {
+        throw new Error(`type param not provided and cannot be inferred`);
+      }
+    }
+
+    await this.client.mutate(SendMessageOp, {
       sessionId: this.id,
-      text: text
+      type: type,
+      text: text,
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+      actions: actions,
+      items: items
     });
   }
 
