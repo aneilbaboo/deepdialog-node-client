@@ -1,40 +1,6 @@
 import assert from 'assert';
 import log from './log';
 
-const UpdateOp =
-`($id: String, $locals: Object, $globals: Object) {
-  sessionUpdate(id: $id, locals: $locals, globals: $globals) {
-    id globals
-    stack(limit: 1) { id dialog tag locals }
-  }
-}`;
-
-const StartFrameOp =
-`($id: String, $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
-  sessionStartFrame(id: $id, dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
-    id globals
-    stack(limit: 1) { id locals }
-  }
-}`;
-
-const EndFrameOp =
-`($id: String, $result: JSON, $globals: JSON) {
-  sessionEndFrame(id: $id, result: $result, globals: $globals) {
-    id globals
-    stack(limit: 1) { id dialog tag locals }
-  }
-}`;
-
-const SendMessageOp =
-`($sessionId: String, $type: MessageType, $text: String,
-   $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
-    messageSend(sessionId: $sessionId, type: $type, text: $text,
-      mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
-      id sessionId endpointInfo { messageId endpointId senderId recipientId }
-      actions
-    }
-}`;
-
 export default class Session {
   constructor(app, {id, globals, currentFrame}) {
     assert(app && app.__proto__ && app.__proto__.constructor.name=='App', 'app must be an App instance', app);
@@ -82,7 +48,12 @@ export default class Session {
 
     this.locked = true;
     try {
-      await this.client.mutate(StartFrameOp, {
+      await this.client.mutate(`($sessionId: String, $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
+        sessionStartFrame(sessionId: $sessionId, dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
+          id globals
+          stack(limit: 1) { id locals }
+        }
+      }`, {
         sessionId: this.id,
         parentFrameId: this.frameId,
         dialog: dialog,
@@ -102,7 +73,12 @@ export default class Session {
 
     this.locked = true;
     try {
-      await this.client.mutate(EndFrameOp, {
+      await this.client.mutate(`($sessionId: String, $result: JSON, $globals: JSON) {
+        sessionEndFrame(sessionId: $sessionId, result: $result, globals: $globals) {
+          id globals
+          stack(limit: 1) { id dialog tag locals }
+        }
+      }`, {
         sessionId: this.id,
         frameId: this.frameId,
         result: result,
@@ -118,7 +94,12 @@ export default class Session {
     log.debug('save() dialog:%s session:%s locals:%s globals:%s frame:%s',
       this.dialogName, this.id, this.locals, this.globals, this.frameId);
     this.checkLock();
-    await this.client.mutate(UpdateOp, {
+    await this.client.mutate(`($sessionId: String, $locals: Object, $globals: Object) {
+      sessionUpdate(sessionId: $sessionId, locals: $locals, globals: $globals) {
+        id globals
+        stack(limit: 1) { id dialog tag locals }
+      }
+    }`, {
       sessionId: this.id,
       globals: this.globals,
       locals: this.locals
@@ -144,7 +125,14 @@ export default class Session {
       ' dialog:%s session:%s frame:%s',
       text, mediaUrl, mediaType, type, actions, items, this.dialogName, this.id, this.frameId);
 
-    await this.client.mutate(SendMessageOp, {
+    await this.client.mutate(`($sessionId: String, $type: MessageType, $text: String,
+       $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
+        messageSend(sessionId: $sessionId, type: $type, text: $text,
+          mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
+          id sessionId endpointInfo { messageId endpointId senderId recipientId }
+          actions
+        }
+    }`, {
       sessionId: this.id,
       type: type,
       text: text,
