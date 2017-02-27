@@ -108,8 +108,6 @@ export default class Session {
       this.locked = false;
       throw e;
     }
-
-
   }
 
   async save() {
@@ -119,6 +117,10 @@ export default class Session {
       globals: this.globals,
       locals: this.locals
     });
+  }
+
+  async sleep(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   async send({text, mediaUrl, mediaType, type, actions, items}) {
