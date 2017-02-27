@@ -74,14 +74,16 @@ export default class Session {
 
     this.locked = true;
     try {
-      await this.client.mutate(`($sessionId: String, $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
-        sessionStartFrame(sessionId: $sessionId, dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
+      await this.client.mutate(`($sessionId: String, $parentId: String,
+          $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
+        sessionStartFrame(sessionId: $sessionId, parentId: $parentId,
+          dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
           id globals
           stack(limit: 1) { id locals }
         }
       }`, {
         sessionId: this.id,
-        parentFrameId: this.frameId,
+        parentId: this.frameId,
         dialog: dialog,
         tag: tag,
         locals: locals,
@@ -165,7 +167,7 @@ export default class Session {
    * @param  {string}   type
    * @param  {Object[]} actions   an array of actionButtons
    * @param  {Object[]} items     an array of items
-   * @return {Promise}           
+   * @return {Promise}
    */
   async send({text, mediaUrl, mediaType, type, actions, items}) {
     if (!type) {
