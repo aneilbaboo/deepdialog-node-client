@@ -10,7 +10,7 @@ const UpdateOp =
 }`;
 
 const StartFrameOp =
-`($id: String, $dialog: String, $tag: String, $locals: Object, $globals: Object) {
+`($id: String, $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
   sessionStartFrame(id: $id, dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
     id globals
     stack(limit: 1) { id locals }
@@ -18,7 +18,7 @@ const StartFrameOp =
 }`;
 
 const EndFrameOp =
-`($id: String, $result: Object, $globals: Object) {
+`($id: String, $result: JSON, $globals: JSON) {
   sessionEndFrame(id: $id, result: $result, globals: $globals) {
     id globals
     stack(limit: 1) { id dialog tag locals }
