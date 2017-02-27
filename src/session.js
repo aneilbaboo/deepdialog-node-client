@@ -18,6 +18,7 @@ export default class Session {
   get client() { return this._app.client; }
   get id() { return this._id; }
   get globals() { return this._globals; }
+  get frameId() { return this._currentFrame.id; }
   get locals() { return this._currentFrame.locals; }
   get dialogName() { return this._currentFrame.dialog; }
   get dialog() { return this.app.getDialog(this._currentFrame.dialog); }
@@ -68,7 +69,7 @@ export default class Session {
    * @return {Promise}
    */
   async start(dialog, tag, locals) {
-    log.debug('start(%s, %s, %s) dialog:%s session:%s frame:%s',
+    log.debug('start(%j, %j, %j) dialog:%s session:%s frame:%s',
       dialog, tag, locals, this.dialogName, this.id, this.frameId);
     this.checkLock();
 

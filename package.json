@@ -17,7 +17,7 @@
     "mocha": "--require scripts/mocha_runner tests/**/*.test.js"
   },
   "scripts": {
-    "prepublish": ". ./scripts/preinstall.sh",
+    "prepublish": ". ./scripts/prepublish.sh",
     "postinstall": ". ./scripts/postinstall.sh",
     "lint": "eslint ./src",
     "lintfix": "eslint ./src --fix",

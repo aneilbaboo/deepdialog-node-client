@@ -6,6 +6,7 @@ describe('Session', function () {
   context('Constructor', function () {
     var session;
     var app;
+
     before(function() {
       app = new App({});
       app.addDialogs(new Dialog('theDialog'));
@@ -14,6 +15,7 @@ describe('Session', function () {
         id: 'session-id',
         globals: { Global: 1},
         currentFrame: {
+          id: 'frame-id',
           dialog: 'theDialog',
           tag: 'theTag',
           locals: { local: 2}
@@ -43,6 +45,10 @@ describe('Session', function () {
       expect(session.locals).to.deep.equal({local:2});
     });
 
+    it('should set the frameId', function() {
+      expect(session.frameId).to.equal('frame-id');
+    });
+
     it('should fail if id is missing', function () {
       expect(()=>{ new Session(app, {globals:{}, currentFrame:{}}); }).to.throw(Error);
     });
@@ -62,6 +68,7 @@ describe('Session', function () {
     it('should fail if client is not a Client instance', function () {
       expect(()=>{ new Session("not a client inst", {id: '123', globals:{}, currentFrame: {}}); }).to.throw(Error);
     });
+
   });
 
   context('variables', function () {
