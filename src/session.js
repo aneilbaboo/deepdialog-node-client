@@ -1,4 +1,5 @@
 import assert from 'assert';
+import log from './log';
 
 const UpdateOp =
 `($id: String, $locals: Object, $globals: Object) {
@@ -75,6 +76,8 @@ export default class Session {
   }
 
   async start({dialog, tag, locals}) {
+    log.debug('start(%s, %s, %s) dialog:%s session:%s',
+      dialog, tag, locals, this.dialogName, this.id);
     this.checkLock();
 
     this.locked = true;
@@ -94,6 +97,7 @@ export default class Session {
   }
 
   async finish(result) {
+    log.debug('finish(%j) dialog:%s tag:%s session:%s ', this.dialogName, this. tag, this.id);
     this.checkLock();
 
     this.locked = true;
@@ -111,6 +115,8 @@ export default class Session {
   }
 
   async save() {
+    log.debug('save() dialog:%s session:%s locals:%s globals:%s frame:%s',
+      this.dialogName, this.id, this.locals, this.globals, this.frameId);
     this.checkLock();
     await this.client.mutate(UpdateOp, {
       sessionId: this.id,
@@ -134,6 +140,9 @@ export default class Session {
         throw new Error(`type param not provided and cannot be inferred`);
       }
     }
+    log.debug('send({text:%j, mediaUrl:%j, mediaType:%j, type:%j, actions:%j, items:%j})'+
+      ' dialog:%s session:%s frame:%s',
+      text, mediaUrl, mediaType, type, actions, items, this.dialogName, this.id, this.frameId);
 
     await this.client.mutate(SendMessageOp, {
       sessionId: this.id,
