@@ -23,27 +23,53 @@ export default class Session {
   get dialog() { return this.app.getDialog(this._currentFrame.dialog); }
   get tag() { return this._currentFrame.tag; }
 
+
+  /**
+   * get - gets a global or local variable
+   *       global variables begin with uppercase
+   *
+   * @param  {type} variable description
+   * @return {Object}        the value of the variable
+   */
   get(variable) {
     return this.locals[variable] || this.globals[variable];
   }
 
-  set(variable, value) {
-    if (variable instanceof Object) {
-      for (let k in variable) {
-        this.set(k, variable[k]);
+  /**
+   * set - set a variable or variables
+   *
+   * e.g., session.set('a', 1);
+   *       session.set('b', 2)
+   *       session.set({a:1, b:2}); // equivalent to above to lines
+   *
+   * @param  {stringOrObject} variableOrHash description
+   * @param  {value}          value    description
+   */
+  set(variableOrHash, value) {
+    if (variableOrHash instanceof Object) {
+      for (let k in variableOrHash) {
+        this.set(k, variableOrHash[k]);
       }
     } else {
-      if (variable[0]==variable[0].toUpperCase()) {
-        this.globals[variable] = value;
+      if (variableOrHash[0]==variableOrHash[0].toUpperCase()) {
+        this.globals[variableOrHash] = value;
       } else {
-        this.locals[variable] = value;
+        this.locals[variableOrHash] = value;
       }
     }
   }
 
-  async start({dialog, tag, locals}) {
-    log.debug('start(%s, %s, %s) dialog:%s session:%s',
-      dialog, tag, locals, this.dialogName, this.id);
+  /**
+   * async start - start a new dialog
+   *
+   * @param  {string}   dialog the dialog to start
+   * @param  {string}   tag    result tag, used in with conjunction with onResult
+   * @param  {Object}   locals local variables to start the dialog with
+   * @return {Promise}
+   */
+  async start(dialog, tag, locals) {
+    log.debug('start(%s, %s, %s) dialog:%s session:%s frame:%s',
+      dialog, tag, locals, this.dialogName, this.id, this.frameId);
     this.checkLock();
 
     this.locked = true;
@@ -67,8 +93,15 @@ export default class Session {
     }
   }
 
+  /**
+   * async finish - end the current dialog, returning result
+   *
+   * @param  {Object} result any JSON-compatible object
+   * @return {Promise}
+   */
   async finish(result) {
-    log.debug('finish(%j) dialog:%s tag:%s session:%s ', this.dialogName, this. tag, this.id);
+    log.debug('finish(%j) dialog:%s tag:%s session:%s frame:%s',
+      this.dialogName, this. tag, this.id, this.frameId);
     this.checkLock();
 
     this.locked = true;
@@ -90,6 +123,12 @@ export default class Session {
     }
   }
 
+
+  /**
+   * async save - saves session variables to the server
+   *
+   * @return {Promise}  description
+   */
   async save() {
     log.debug('save() dialog:%s session:%s locals:%s globals:%s frame:%s',
       this.dialogName, this.id, this.locals, this.globals, this.frameId);
@@ -106,12 +145,29 @@ export default class Session {
     });
   }
 
+
+  /**
+   * async sleep - a Promisified version of setTimeout
+   *
+   * @param  {float} milliseconds
+   * @return {Promise}
+   */
   async sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
+  /**
+   * async send - send a message to the user
+   *
+   * @param  {string}   text
+   * @param  {string}   mediaUrl
+   * @param  {string}   mediaType
+   * @param  {string}   type
+   * @param  {Object[]} actions   an array of actionButtons
+   * @param  {Object[]} items     an array of items
+   * @return {Promise}           
+   */
   async send({text, mediaUrl, mediaType, type, actions, items}) {
-    this.checkLock();
     if (!type) {
       if (text) {
         type = 'text';
@@ -121,9 +177,12 @@ export default class Session {
         throw new Error(`type param not provided and cannot be inferred`);
       }
     }
+
     log.debug('send({text:%j, mediaUrl:%j, mediaType:%j, type:%j, actions:%j, items:%j})'+
       ' dialog:%s session:%s frame:%s',
       text, mediaUrl, mediaType, type, actions, items, this.dialogName, this.id, this.frameId);
+
+    this.checkLock();
 
     await this.client.mutate(`($sessionId: String, $type: MessageType, $text: String,
        $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
