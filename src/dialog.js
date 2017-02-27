@@ -44,12 +44,12 @@ export default class Dialog {
   }
 
   /**
-   * onPostback - handles a postback
+   * onPayload - handles a developer-provided payload from postback or quickreply buttons
    *
    * @param  {string}   payload description
    * @param  {Function} fn      description
    */
-  onPostback(payload, fn) {
+  onPayload(payload, fn) {
     return this.onInput({payload: payload}, fn);
   }
 
