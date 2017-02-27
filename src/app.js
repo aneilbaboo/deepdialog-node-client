@@ -216,10 +216,11 @@ export default class App {
   }
 
   sessionFromNotificationData(data) {
+    var currentFrame = data.matchedFrame || data.session.stack[0];
     return new Session(this, {
       id: data.session.id,
       globals: data.session.globals,
-      currentFrame: data.matchedFrame
+      currentFrame: currentFrame
     });
   }
 
