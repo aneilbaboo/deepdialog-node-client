@@ -123,12 +123,13 @@ export default class Dialog {
   static matchesPattern(pattern, data) {
     for (let k in pattern) {
       let pval = pattern[k];
+      let dval = data[k];
       if (isFunction(pval)) {
-        if (!pval(data[k])) {
+        if (!pval(dval)) {
           return false;
         }
       } else {
-        if (pattern[k]!=data[k]) {
+        if (pval!=any && pval!=dval) {
           return false;
         }
       }
