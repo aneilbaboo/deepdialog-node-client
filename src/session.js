@@ -177,7 +177,7 @@ export default class Session {
       } else if (mediaUrl) {
         type = 'image';
       } else {
-        throw new Error(`type param not provided and cannot be inferred`);
+        throw new Error(`Attempt to send message: type not provided and cannot be inferred`);
       }
     }
 

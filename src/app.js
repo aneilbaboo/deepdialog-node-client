@@ -120,6 +120,10 @@ export default class App {
           variables);
   }
 
+  createServer() {
+    return new AppServer(this);
+  }
+
   get server() {
     if (!this._server) {
       this._server = new AppServer(this);

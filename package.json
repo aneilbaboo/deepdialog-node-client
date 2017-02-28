@@ -55,6 +55,7 @@
     "express-promise-router": "1.1.1",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
+    "morgan": "1.8.1",
     "request": "2.79.0",
     "request-promise": "4.1.1",
     "winston": "2.3.1"

@@ -2,15 +2,19 @@ import express from 'express';
 import promiseRouter from 'express-promise-router';
 import bodyParser from 'body-parser';
 import compression from 'compression';
-
 import {sleep} from './util';
 import log from './log';
+import morgan from 'morgan';
 
 export default class AppServer {
   constructor(app) {
     this.app = app;
+    this.expressApp = this.makeExpressApp();
   }
 
+  use(route, fn) {
+    this.expressApp.use(route, fn);
+  }
   /**
    * start- starts the app server this function resolves when the server actually starts
    *
@@ -22,10 +26,9 @@ export default class AppServer {
       throw new Error(`Server already started`);
     }
 
-    var server = this.makeServer();
     var started = false;
 
-    this.server = server.listen(port, function () {
+    this.server = this.expressApp.listen(port, function () {
       log.info('DeepDialog App server listening on port %s', port);
       started = true;
     });
@@ -52,15 +55,16 @@ export default class AppServer {
     }
   }
 
-  makeServer() {
+  makeExpressApp() {
     var app = this.app;
-    var server = express();
+    var expressApp = express();
     var router = promiseRouter();
 
-    server.use(bodyParser.urlencoded({extended: true, inflate:true}));
-    server.use(bodyParser.json(true));
-    server.use(compression());
-    server.use("/", router);
+    expressApp.use(bodyParser.urlencoded({extended: true, inflate:true}));
+    expressApp.use(bodyParser.json(true));
+    expressApp.use(compression());
+    expressApp.use(morgan('common'));
+    expressApp.use("/", router);
 
     router.post('/webhook', async function (req, res) {
       var notifications = req.body.notifications;
@@ -80,6 +84,6 @@ export default class AppServer {
 
     });
 
-    return server;
+    return expressApp;
   }
 }
