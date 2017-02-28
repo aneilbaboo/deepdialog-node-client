@@ -109,8 +109,8 @@ export default class Session {
 
     this.locked = true;
     try {
-      await this.client.mutate(`($sessionId: String, $result: JSON, $globals: JSON) {
-        sessionEndFrame(sessionId: $sessionId, result: $result, globals: $globals) {
+      await this.client.mutate(`($sessionId: String, $frameId: String,  $result: JSON, $globals: JSON) {
+        sessionEndFrame(sessionId: $sessionId, frameId: $frameId, result: $result, globals: $globals) {
           id globals
           stack(limit: 1) { id dialog tag locals }
         }
