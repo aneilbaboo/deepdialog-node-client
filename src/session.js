@@ -137,7 +137,7 @@ export default class Session {
     log.debug('save() dialog:%s session:%s locals:%s globals:%s frame:%s',
       this.dialogName, this.id, this.locals, this.globals, this.frameId);
     this.checkLock();
-    await this.client.mutate(`($sessionId: String, $locals: Object, $globals: Object) {
+    await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
       sessionUpdate(sessionId: $sessionId, locals: $locals, globals: $globals) {
         id globals
         stack(limit: 1) { id dialog tag locals }
