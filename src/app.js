@@ -137,6 +137,7 @@ export default class App {
 
   async handleNotification(notification) {
     var promises = [];
+    log.silly('Handling notification: %j', notification);
     var appHandler = this._eventHandlers[event];
     var event = notification.event;
 
@@ -197,20 +198,19 @@ export default class App {
     var dialog = session.dialog;
     var data = notification.data;
 
-    var [inputHandler, extractor] = dialog.getInputHandler(data);
-    if (inputHandler) {
+    var result = dialog.getInputHandler(data);
+    if (result) {
+      var [inputHandler, extractor] = result;
       await Promise.resolve(inputHandler(session, extractor(notification), notification));
     } else {
-      log.warn('Dialog %s received %s, but no handler found', dialog.name, notification);
+      log.warn('Dialog %s received %j, but no handler found', dialog.name, data);
     }
   }
 
   async handleFrameResult(session, notification) {
-    log.info("handleFrameResult 1");
     var dialog = session.dialog;
     var completedFrame = notification.session.completedFrame[0];
     var resultHandler = dialog.getResultHandler(completedFrame.dialog, completedFrame.tag);
-    log.info("handleFrameResult 2");
     if (resultHandler) {
       await Promise.resolve(resultHandler(session, completedFrame.result, notification));
     } else {
