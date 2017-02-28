@@ -1,3 +1,4 @@
+import {isString} from 'util';
 import assert from 'assert';
 import log from './log';
 
@@ -170,7 +171,18 @@ export default class Session {
    * @param  {Object[]} items     an array of items
    * @return {Promise}
    */
-  async send({text, mediaUrl, mediaType, type, actions, items}) {
+  async send(params) {
+    var text, type;
+    if (isString(params)) {
+      text = params;
+      type = 'text';
+    } else {
+      text = params.text;
+      type = params.type;
+
+      var {mediaUrl, mediaType, actions, items } = params;
+    }
+
     if (!type) {
       if (text) {
         type = 'text';
