@@ -83,7 +83,7 @@ export default class Session {
       }
       nextArg = args.pop();
     }
-    
+
     var graphQLVars = {
       sessionId: this.id,
       parentId: this.frameId,
@@ -209,9 +209,9 @@ export default class Session {
       if (text) {
         type = 'text';
       } else if (mediaUrl) {
-        type = 'image';
+        type == 'image'; // smooch message type, not mediaType
       } else {
-        throw new Error(`Attempt to send message: type not provided and cannot be inferred`);
+        throw new Error(`Unable to send message: type not provided and cannot be inferred`);
       }
     }
 
