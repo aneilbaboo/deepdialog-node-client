@@ -1,4 +1,4 @@
-import {isString} from 'util';
+import {isString, isObject} from 'util';
 import assert from 'assert';
 import log from './log';
 
@@ -69,7 +69,36 @@ export default class Session {
    * @param  {Object}   locals local variables to start the dialog with
    * @return {Promise}
    */
-  async start(dialog, tag, locals) {
+  async start(dialog, ...args) {
+    var tag, locals;
+    var nextArg = args.pop();
+
+    while (nextArg) {
+      if (isString(nextArg)) {
+        tag = nextArg;
+      } else if (isObject(nextArg)) {
+        locals = nextArg;
+      } else {
+        throw new Error(`Unrecognized argument to Session#start: ${nextArg}. Expecting a tag or local variables`);
+      }
+      nextArg = args.pop();
+    }
+    
+    var graphQLVars = {
+      sessionId: this.id,
+      parentId: this.frameId,
+      dialog: dialog,
+      globals: this.globals
+    };
+
+    if (tag) {
+      graphQLVars.tag = tag;
+    }
+
+    if (locals) {
+      graphQLVars.locals = locals;
+    }
+
     log.debug('start(%j, %j, %j) dialog:%s session:%s frame:%s',
       dialog, tag, locals, this.dialogName, this.id, this.frameId);
     this.checkLock();
@@ -81,16 +110,9 @@ export default class Session {
         sessionStartFrame(sessionId: $sessionId, parentId: $parentId,
           dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
           id globals
-          stack(limit: 1) { id locals }
+          stack(limit: 1) { id dialog tag locals }
         }
-      }`, {
-        sessionId: this.id,
-        parentId: this.frameId,
-        dialog: dialog,
-        tag: tag,
-        locals: locals,
-        globals: this.globals
-      });
+      }`, graphQLVars);
     } catch (e) {
       this.locked = false;
       throw e;
