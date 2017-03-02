@@ -37,7 +37,7 @@ export default class Dialog {
    * onText - handles an arbitrary text input (in future, regexes)
    *
    * @param  {type} text description
-   * @param  {type} fn   description
+   * @param  {type} fn   function(session, text)
    */
   onText(text, fn) {
     return this.onInput({text: text}, fn, (n)=>n.data.text);
@@ -92,9 +92,15 @@ export default class Dialog {
       dataExtractor = (d)=>d;
     }
 
-    assert(isObject(pattern), 'pattern must be an object or null');
-    assert(isFunction(fn), 'handler must be a function');
-    assert(isFunction(dataExtractor), 'dataExtractor must be a function');
+    if (!isObject(pattern)) {
+      throw new Error(`pattern must be an object or null, but got ${pattern}`);
+    }
+    if (!isFunction(fn)) {
+      throw new Error(`handler must be a function, but got ${fn}`);
+    }
+    if (!isFunction(dataExtractor)) {
+      throw new Error(`dataExtractor must be a function, but got ${dataExtractor}`);
+    }
 
     this.inputHandlers.push([pattern, fn, dataExtractor]);
   }
