@@ -10,6 +10,7 @@ import log from './log';
 
 export default class App {
   constructor({appId, appSecret, mainDialog, hostURL, deepDialogServer}) {
+    deepDialogServer = deepDialogServer || 'https://api.deepdialog.ai';
     var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
     this._client = new Client(appId, appSecret, ddGraphQLURL);
     this._dialogs = {};
