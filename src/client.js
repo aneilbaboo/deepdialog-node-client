@@ -1,6 +1,8 @@
 import {Lokka} from 'lokka';
 import {Transport} from 'lokka-transport-http';
 
+import log from './log';
+
 const GraphQLAPIURL = 'http://apistaging.deepdialog.ai/graphql';
 
 export default class Client {
@@ -17,11 +19,13 @@ export default class Client {
     });
   }
 
-  async query(op) {
-    return await this.client.query(op);
+  async query(op, vars) {
+    log.debug('GraphQL Query\nVariables: %j\nOp: %j', vars, op);
+    return await this.client.query(op, vars);
   }
 
   async mutate(op, vars) {
+    log.debug('GraphQL Mutation\nVariables: %j\nOp: %j', vars, op);
     return await this.client.mutate(op, vars);
   }
 }
