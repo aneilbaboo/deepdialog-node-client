@@ -12,14 +12,19 @@ export default class App {
   constructor({appId, appSecret, mainDialog, hostURL, deepDialogServer}) {
     var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
     this._client = new Client(appId, appSecret, ddGraphQLURL);
-    this.mainDialog = null;
     this._dialogs = {};
     this._nlpModels = {};
-    this.mainDialog = mainDialog;
-    this.hostURL = hostURL;
+    this._mainDialog = mainDialog;
+    this._hostURL = hostURL;
     this._eventHandlers = {};
     this.https = true;
   }
+
+  get mainDialog() { return this._mainDialog; }
+  set mainDialog(val) { this._mainDialog = val; }
+
+  get hostURL() { return this._hostURL; }
+  set hostURL(val) { this._hostURL = val; }
 
   get domain() { return this._domain;  }
   set domain(value) { this._domain = value; }
@@ -160,8 +165,6 @@ export default class App {
    * @param  {Object} notification description
    */
   async handleFrameEvent(notification) {
-    log.silly('Handling notification: %j', notification);
-
     var session = this.sessionFromNotificationData(notification);
     var event = notification.event;
 
@@ -186,9 +189,10 @@ export default class App {
 
   async handleFrameStart(session, notification) {
     var dialog = session.dialog;
-
-    if (dialog.startHandler) {
-      await Promise.resolve(dialog.startHandler(session, session.locals, notification));
+    var startHandler = dialog.startHandler;
+    log.info('Received frame_start for session:%s locals: %j', session.id, session.locals);
+    if (startHandler) {
+      await Promise.resolve(startHandler(session, session.locals, notification));
     } else {
       log.warn('Couldn\'t find start handler for dialog %s', dialog.name);
     }
@@ -197,8 +201,9 @@ export default class App {
   async handleFrameInput(session, notification) {
     var dialog = session.dialog;
     var data = notification.data;
-
     var result = dialog.getInputHandler(data);
+    log.info('Received frame_input for session: %s notification: %j', session.id, notification);
+
     if (result) {
       var [inputHandler, extractor] = result;
       await Promise.resolve(inputHandler(session, extractor(notification), notification));
@@ -211,6 +216,9 @@ export default class App {
     var dialog = session.dialog;
     var completedFrame = notification.session.completedFrame[0];
     var resultHandler = dialog.getResultHandler(completedFrame.dialog, completedFrame.tag);
+
+    log.info('Received frame_result for session: %s notification: %j', session.id, notification);
+
     if (resultHandler) {
       await Promise.resolve(resultHandler(session, completedFrame.result, notification));
     } else {
