@@ -4,15 +4,17 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor(app, {id, globals, currentFrame}) {
+  constructor(app, {id, globals, currentFrame: {id:frameId, dialog, locals, tag}}) {
     assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
     assert(globals, 'globals');
-    assert(currentFrame, 'currentFrame');
     this._app = app;
     this._id = id;
-    this._currentFrame = currentFrame;
-    this._globals = globals;
+    this._frameId = frameId;
+    this._locals = locals || {};
+    this._dialogName = dialog;
+    this._tag = tag;
+    this._globals = globals || {};
     this.locked = false;
   }
 
@@ -20,11 +22,11 @@ export default class Session {
   get client() { return this._app.client; }
   get id() { return this._id; }
   get globals() { return this._globals; }
-  get frameId() { return this._currentFrame.id; }
-  get locals() { return this._currentFrame.locals; }
-  get dialogName() { return this._currentFrame.dialog; }
-  get dialog() { return this.app.getDialog(this._currentFrame.dialog); }
-  get tag() { return this._currentFrame.tag; }
+  get frameId() { return this._frameId; }
+  get locals() { return this._locals; }
+  get dialogName() { return this._dialogName; }
+  get dialog() { return this.app.getDialog(this.dialogName); }
+  get tag() { return this._tag; }
 
 
   /**
