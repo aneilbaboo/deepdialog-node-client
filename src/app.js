@@ -31,7 +31,9 @@ export default class App {
   set domain(value) { this._domain = value; }
 
   get webhook() {
-    return url.resolve(this.hostURL,'webhook');
+    if (this.hostURL) {
+      return url.resolve(this.hostURL,'webhook');
+    }
   }
 
   get client() { return this._client; }
