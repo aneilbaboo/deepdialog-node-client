@@ -1,10 +1,11 @@
+import App from './app';
 import {isString, isObject} from 'util';
 import assert from 'assert';
 import log from './log';
 
 export default class Session {
   constructor(app, {id, globals, currentFrame}) {
-    assert(app && app.__proto__ && app.__proto__.constructor.name=='App', 'app must be an App instance', app);
+    assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
     assert(globals, 'globals');
     assert(currentFrame, 'currentFrame');
@@ -156,7 +157,7 @@ export default class Session {
    * @return {Promise}  description
    */
   async save() {
-    log.debug('save() dialog:%s session:%s locals:%j globals:%j frame:%s',
+    log.debug('Session#save dialog:%s session:%s locals:%j globals:%j frame:%s',
       this.dialogName, this.id, this.locals, this.globals, this.frameId);
     this.checkLock();
     await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
@@ -169,6 +170,7 @@ export default class Session {
       globals: this.globals,
       locals: this.locals
     });
+    log.debug('Session#save completed for session:%s frame:%s', this.id, this.frameId);
   }
 
 
