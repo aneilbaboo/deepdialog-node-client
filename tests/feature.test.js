@@ -64,7 +64,8 @@ describe('Feature test', function () {
     beforeEach(async function() {
       app = new App({
         appId: process.env.DEEPDIALOG_TEST_APPID,
-        appSecret: process.env.DEEPDIALOG_TEST_APPSECRET
+        appSecret: process.env.DEEPDIALOG_TEST_APPSECRET,
+        deepDialogServer: process.env.DEEPDIALOG_TEST_SERVER
       });
       app.dialogs = [];
       app.nlpModels = [];
@@ -107,7 +108,7 @@ describe('Feature test', function () {
         accessToken: 'testAccessTokenChild'
       });
 
-      mainDialog = new Dialog('MainDialog');
+      mainDialog = new Dialog({name: 'MainDialog'});
       mainDialog.nlpModelName = 'mainNLP';
 
       mainDialog.onStart(async function(session) {
@@ -129,7 +130,7 @@ describe('Feature test', function () {
       mainDialog.onRecovery(async function(session) { // eslint-disable-line
       });
 
-      childDialog = new Dialog('ChildDialog');
+      childDialog = new Dialog({name: 'ChildDialog'});
       childDialog.nlpModelName = 'childNLP';
 
       childDialog.onIntent('buy_tickets', async function (session, {entities}) {
@@ -278,7 +279,7 @@ describe('Feature test', function () {
     it('should correctly handle the frame_start event with onStart handler', async function() {
       var mainDialog;
 
-      mainDialog = new Dialog('MainDialog');
+      mainDialog = new Dialog({name: 'MainDialog'});
 
       var session, raw;
       mainDialog.onStart((s, r) => { session = s; raw = r; });
@@ -311,7 +312,7 @@ describe('Feature test', function () {
     it('should correctly handle the frame_input event with onIntent handler', async function () {
       var mainDialog;
 
-      mainDialog = new Dialog('MainDialog');
+      mainDialog = new Dialog({name: 'MainDialog'});
 
       var session, entities, raw;
       mainDialog.onIntent('hello', (s, e, r) => { session = s; entities=e; raw=r; });
@@ -345,7 +346,7 @@ describe('Feature test', function () {
     it('should correctly handle the frame_result event with onResult handler', async function () {
       var mainDialog;
 
-      mainDialog = new Dialog('MainDialog');
+      mainDialog = new Dialog({name: 'MainDialog'});
 
       var session, result, raw;
       mainDialog.onResult('HelloDialog', 'resultTag', (s, r1, r2) => { session = s; result=r1; raw=r2; });
@@ -387,7 +388,7 @@ describe('Feature test', function () {
     it('should correctly handle the frame_default event with onDefault handler', async function () {
       var mainDialog;
 
-      mainDialog = new Dialog('MainDialog');
+      mainDialog = new Dialog({name: 'MainDialog'});
 
       var session, raw;
       mainDialog.onDefault((s, r) => { session = s; raw=r; });

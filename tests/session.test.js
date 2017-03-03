@@ -9,7 +9,7 @@ describe('Session', function () {
 
     before(function() {
       app = new App({});
-      app.addDialogs(new Dialog('theDialog'));
+      app.addDialogs(new Dialog({name: 'theDialog'}));
       log.info('app: %j', app);
       session = new Session(app, {
         id: 'session-id',
@@ -108,6 +108,16 @@ describe('Session', function () {
       session.set({Global1:1, local1:1, Global2:2, local2:2});
       expect(session.locals).to.deep.equal({local:2, local1:1, local2:2});
       expect(session.globals).to.deep.equal({Global:1, Global1:1, Global2:2});
+    });
+
+    it('should set a single local var and value, when given two args', function() {
+      session.set('local3',3);
+      expect(session.locals.local3).to.equal(3);
+    });
+
+    it('should set a single global var and value, when given two args', function() {
+      session.set('Global3',3);
+      expect(session.globals.Global3).to.equal(3);
     });
   });
 
