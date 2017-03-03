@@ -156,7 +156,7 @@ export default class Session {
    * @return {Promise}  description
    */
   async save() {
-    log.debug('save() dialog:%s session:%s locals:%s globals:%s frame:%s',
+    log.debug('save() dialog:%s session:%s locals:%j globals:%j frame:%s',
       this.dialogName, this.id, this.locals, this.globals, this.frameId);
     this.checkLock();
     await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
