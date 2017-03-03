@@ -31,11 +31,11 @@ export default class Session {
    * get - gets a global or local variable
    *       global variables begin with uppercase
    *
-   * @param  {type} variable description
-   * @return {Object}        the value of the variable
+   * @param  {type}     key description
+   * @return {Object}
    */
-  get(variable) {
-    return this.locals[variable] || this.globals[variable];
+  get(key) {
+    return (this.locals.hasOwnProperty(key)) ? this.locals[key] : this.globals[key];
   }
 
   /**
