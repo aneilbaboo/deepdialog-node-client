@@ -155,7 +155,7 @@ export default class Dialog {
       fn = tag;
       tag = null;
     }
-    tag = tag || "<{null}>";
+    tag = tag || any;
     assert(isString(dialog), 'dialog must be a string');
     assert(isString(tag), 'tag must be a string');
     assert(isFunction(fn), 'handler must be a function');
@@ -164,6 +164,7 @@ export default class Dialog {
   }
 
   getResultHandler(dialog, tag) {
+    tag = tag || any;
     return this.resultHandlers[resultHandlerKey(dialog, tag)];
   }
 
