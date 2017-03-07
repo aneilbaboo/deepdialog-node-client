@@ -257,4 +257,25 @@ export default class Session {
       throw new Error('Session locked: no operations allowed after start() or finish()');
     }
   }
+
+  async reset(params) {
+    var {frameId, globals, locals} = params;
+
+    log.debug('Session#reset(%j) | dialog:%s session:%s frame:%s',
+      params, this.dialogName, this.id, this.frameId);
+
+    var result = await this.app.client(`($sessionId: String, $frameId: String, $globals: Boolean, $locals: Boolean) {
+      sessionReset(sessionId: $sessionId, frameId: $frameId, globals: $globals, locals: $locals) {
+        id globals stack { id dialog tag locals }
+      }
+    }`, {
+      sessionId: this.id,
+      frameId: frameId,
+      globals: globals,
+      locals: locals
+    });
+    log.debug('Session#reset(%j)=>%j | dialog:%s frame:%s session:%s',
+      params, result, this.dialogName, this.frameId, this.id);
+    this._updateValues({currentFrame: result.stack[0], ...result});
+  }
 }
