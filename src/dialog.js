@@ -4,12 +4,12 @@ import assert from 'assert';
 import {any} from './constants';
 export default class Dialog {
 
-  constructor({name, description}) {
+  constructor({name, description, nlpModelName}) {
     this.name = name;
     this.description = description;
     assert(typeof(name)=='string', 'Dialog name must be a string');
 
-    this._nlpModelName = null;
+    this._nlpModelName = nlpModelName;
     this.startHandler = null;
     this.inputHandlers = [];
     this.resultHandlers = {};
