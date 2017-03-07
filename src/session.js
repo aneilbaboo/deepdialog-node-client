@@ -4,10 +4,10 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor(app, {id, globals, currentFrame: {id:frameId, dialog, locals, tag}}) {
+  constructor({app, id, globals, currentFrame}) {
     assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
-    assert(globals, 'globals');
+    var {id:frameId, dialog, locals, tag} = currentFrame || {};
     this._app = app;
     this._id = id;
     this._frameId = frameId;
@@ -16,6 +16,15 @@ export default class Session {
     this._tag = tag;
     this._globals = globals || {};
     this.locked = false;
+  }
+
+  validate() {
+    assert(this.app.constructor==App, 'app must be an App instance');
+    assert(this.id, 'invalid session id (.id)');
+    assert(this.frameId, 'invalid stack frame id (.frameId)');
+    assert(this.dialog, 'invalid dialog (.dialogName)');
+    assert(this.globals, 'invalid globals (.globals)');
+    assert(this.locals, 'invalid locals (.locals)');
   }
 
   get app() { return this._app; }

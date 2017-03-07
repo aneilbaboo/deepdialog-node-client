@@ -11,7 +11,8 @@ describe('Session', function () {
       app = new App({});
       app.addDialogs(new Dialog({name: 'theDialog'}));
       log.info('app: %j', app);
-      session = new Session(app, {
+      session = new Session({
+        app: app,
         id: 'session-id',
         globals: { Global: 1},
         currentFrame: {
@@ -50,19 +51,19 @@ describe('Session', function () {
     });
 
     it('should fail if id is missing', function () {
-      expect(()=>{ new Session(app, {globals:{}, currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session({app: app, globals:{}, currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if id is missing', function () {
-      expect(()=>{ new Session(app, {globals:{}, currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session({app: app, globals:{}, currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if globals is missing', function () {
-      expect(()=>{ new Session(app, {id:'123', currentFrame:{}}); }).to.throw(Error);
+      expect(()=>{ new Session({app: app, id:'123', currentFrame:{}}); }).to.throw(Error);
     });
 
     it('should fail if currentFrame is missing', function () {
-      expect(()=>{ new Session(app, {id: '123', globals:{}}); }).to.throw(Error);
+      expect(()=>{ new Session({app: app, id: '123', globals:{}}); }).to.throw(Error);
     });
 
     it('should fail if client is not a Client instance', function () {
@@ -75,7 +76,7 @@ describe('Session', function () {
     var session;
     beforeEach(function() {
       var app = new App({});
-      session = new Session(app, {
+      session = new Session({app: app,
         id: 'session-id',
         globals: { Global: 1},
         currentFrame: {
