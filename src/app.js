@@ -225,7 +225,7 @@ export default class App {
     if (resultHandler) {
       await Promise.resolve(resultHandler(session, completedFrame.result, notification));
     } else {
-      log.error("Couldn't find result handler for %s.%s in dialog %s",
+      log.error("Couldn't find result handler for %s|%s in dialog %s",
       completedFrame.dialog, completedFrame.tag, dialog.name);
     }
   }
@@ -240,4 +240,20 @@ export default class App {
     });
   }
 
+  async getSessions({id, before, limit}) {
+    let sessions = await this.client.query(`($id: String,
+      $before: string, $limit: string) {
+        app { sessions(id:$id, before:$before, limit:$limit) {
+          id globals stack(limit:1) { id locals tag dialog }
+        }}
+      }`,
+      {id:id, limit:limit, before:before}
+    );
+    return sessions.map((s)=>new Session({
+      app: this,
+      id: s.id,
+      globals: s.globals,
+      currentFrame: s.stack[0]
+    }));
+  }
 }
