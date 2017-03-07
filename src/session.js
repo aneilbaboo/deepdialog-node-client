@@ -7,8 +7,12 @@ export default class Session {
   constructor({app, id, globals, currentFrame}) {
     assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
-    var {id:frameId, dialog, locals, tag} = currentFrame || {};
     this._app = app;
+    this._updateValues({id:id, globals:globals, currentFrame:currentFrame});
+  }
+
+  _updateValues({id, globals, currentFrame}) {
+    var {id:frameId, dialog, locals, tag} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
@@ -111,13 +115,14 @@ export default class Session {
       graphQLVars.locals = locals;
     }
 
-    log.debug('start(%j, %j, %j) dialog:%s session:%s frame:%s',
-      dialog, tag, locals, this.dialogName, this.id, this.frameId);
+    log.debug('Session#start(%j, %j, %j) | dialog:%s frame:%s session:%s',
+      dialog, tag, locals, this.dialogName, this.frameId, this.id);
+
     this.checkLock();
 
     this.locked = true;
     try {
-      await this.client.mutate(`($sessionId: String, $parentId: String,
+      var result = await this.client.mutate(`($sessionId: String, $parentId: String,
           $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
         sessionStartFrame(sessionId: $sessionId, parentId: $parentId,
           dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
@@ -125,6 +130,10 @@ export default class Session {
           stack(limit: 1) { id dialog tag locals }
         }
       }`, graphQLVars);
+
+      log.debug('Session#start() => %j | dialog:%s frame:%s session:%s',
+        result, this.dialogName, this.frameId, this.id);
+
     } catch (e) {
       this.locked = false;
       throw e;
@@ -138,13 +147,14 @@ export default class Session {
    * @return {Promise}
    */
   async finish(result) {
-    log.debug('finish(%j) dialog:%s tag:%s session:%s frame:%s',
-      this.dialogName, this. tag, this.id, this.frameId);
+    log.debug('Session#finish(%j) | dialog:%s frame:%s session:%s',
+      result, this.dialogName, this.frameId, this.id);
+
     this.checkLock();
 
     this.locked = true;
     try {
-      await this.client.mutate(`($sessionId: String, $frameId: String,  $result: JSON, $globals: JSON) {
+      var response = await this.client.mutate(`($sessionId: String, $frameId: String,  $result: JSON, $globals: JSON) {
         sessionEndFrame(sessionId: $sessionId, frameId: $frameId, result: $result, globals: $globals) {
           id globals
           stack(limit: 1) { id dialog tag locals }
@@ -152,9 +162,12 @@ export default class Session {
       }`, {
         sessionId: this.id,
         frameId: this.frameId,
-        result: result,
-        suppressNotification: true
+        result: result
       });
+
+      log.debug('Session#finish() => %j | dialog:%s frame:%s session:%s',
+        response, this.dialogName, this.frameId, this.id);
+
     } catch (e) {
       this.locked = false;
       throw e;
@@ -168,10 +181,12 @@ export default class Session {
    * @return {Promise}  description
    */
   async save() {
-    log.debug('Session#save dialog:%s session:%s locals:%j globals:%j frame:%s',
-      this.dialogName, this.id, this.locals, this.globals, this.frameId);
+
+    log.debug('Session#save() | locals:%j globals:%j dialog:%s frame:%s session:%s',
+      this.locals, this.globals, this.dialogName, this.frameId, this.id);
+
     this.checkLock();
-    await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
+    var result = await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
       sessionUpdate(sessionId: $sessionId, locals: $locals, globals: $globals) {
         id globals
         stack(limit: 1) { id dialog tag locals }
@@ -181,7 +196,9 @@ export default class Session {
       globals: this.globals,
       locals: this.locals
     });
-    log.debug('Session#save completed for session:%s frame:%s', this.id, this.frameId);
+
+    log.debug('Session#save() => %j | dialog:%s frame:%s session:%s',
+      result, this.dialogName, this.frameId, this.id);
   }
 
 
@@ -228,13 +245,12 @@ export default class Session {
       }
     }
 
-    log.debug('send({text:%j, mediaUrl:%j, mediaType:%j, type:%j, actions:%j, items:%j})'+
-      ' dialog:%s session:%s frame:%s',
-      text, mediaUrl, mediaType, type, actions, items, this.dialogName, this.id, this.frameId);
+    log.debug('Session#send(%j) | dialog:%s session:%s frame:%s',
+      params, this.dialogName, this.id, this.frameId);
 
     this.checkLock();
 
-    await this.client.mutate(`($sessionId: String, $type: MessageType, $text: String,
+    var result = await this.client.mutate(`($sessionId: String, $type: MessageType, $text: String,
        $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
         messageSend(sessionId: $sessionId, type: $type, text: $text,
           mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
@@ -250,6 +266,9 @@ export default class Session {
       actions: actions,
       items: items
     });
+    log.debug('Session#send(...) => %j | dialog:%s session:%s frame:%s',
+      result, this.dialogName, this.id, this.frameId);
+
   }
 
   checkLock() {
