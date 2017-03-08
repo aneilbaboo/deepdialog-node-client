@@ -240,7 +240,9 @@ export default class App {
     });
   }
 
-  async getSessions({id, before, limit}) {
+  async getSessions(params) {
+    var {id, before, limit} = params;
+    log.debug('App#getSessions %j', params);
     let sessions = await this.client.query(`($id: String,
       $before: string, $limit: string) {
         app { sessions(id:$id, before:$before, limit:$limit) {
@@ -249,6 +251,7 @@ export default class App {
       }`,
       {id:id, limit:limit, before:before}
     );
+    log.debug('App#getSessions => %j', sessions);
     return sessions.map((s)=>new Session({
       app: this,
       id: s.id,
