@@ -241,16 +241,14 @@ export default class App {
   }
 
   async getSessions(params) {
-    var {id, before, limit} = params;
     log.debug('App#getSessions %j', params);
-    let sessions = await this.client.query(`($id: String,
-      $before: string, $limit: string) {
-        app { sessions(id:$id, before:$before, limit:$limit) {
-          id globals stack(limit:1) { id locals tag dialog }
-        }}
-      }`,
-      {id:id, limit:limit, before:before}
-    );
+    var result = await this.client.query(`query getSessions($id: String, $before: String, $limit:Int) {
+      app { sessions(id:$id, before:$before, limit:$limit) {
+        id globals stack(limit:1) { id locals tag dialog   }
+      } } }`,
+      params);
+
+    var sessions = result.app.sessions;
     log.debug('App#getSessions => %j', sessions);
     return sessions.map((s)=>new Session({
       app: this,

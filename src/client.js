@@ -21,7 +21,7 @@ export default class Client {
 
   async query(op, vars) {
     log.debug('GraphQL Query\nVariables: %j\nOp: %j', vars, op);
-    return await this.client.query(op, vars);
+    return await this.client.query(op, vars).catch(function(e) { throw e; }); 
   }
 
   async mutate(op, vars) {
