@@ -278,23 +278,22 @@ export default class Session {
   }
 
   async reset(params) {
-    var {frameId, globals, locals} = params;
+    params = params || {};
 
     log.debug('Session#reset(%j) | dialog:%s session:%s frame:%s',
       params, this.dialogName, this.id, this.frameId);
-
-    var result = await this.app.client(`($sessionId: String, $frameId: String, $globals: Boolean, $locals: Boolean) {
+    assert(this.app, 'app is not defined!');
+    var result = await this.client.mutate(`($sessionId: String, $frameId: String, $globals: Boolean, $locals: Boolean) {
       sessionReset(sessionId: $sessionId, frameId: $frameId, globals: $globals, locals: $locals) {
         id globals stack { id dialog tag locals }
       }
     }`, {
-      sessionId: this.id,
-      frameId: frameId,
-      globals: globals,
-      locals: locals
+      ...params,
+      sessionId: this.id
     });
     log.debug('Session#reset(%j)=>%j | dialog:%s frame:%s session:%s',
       params, result, this.dialogName, this.frameId, this.id);
-    this._updateValues({currentFrame: result.stack[0], ...result});
+    var session = result.sessionReset;
+    this._updateValues({currentFrame: session.stack[0], ...session});
   }
 }
