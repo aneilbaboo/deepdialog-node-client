@@ -234,6 +234,7 @@ export default class App {
     var currentFrame = data.matchedFrame || data.session.stack[0];
     return new Session({
       app: this,
+      accessToken: data.accessToken,
       id: data.session.id,
       globals: data.session.globals,
       currentFrame: currentFrame
