@@ -155,17 +155,21 @@ export default class Dialog {
       fn = tag;
       tag = null;
     }
-    tag = tag || any;
     assert(isString(dialog), 'dialog must be a string');
-    assert(isString(tag), 'tag must be a string');
+    assert(!tag || isString(tag), 'tag must be a string');
     assert(isFunction(fn), 'handler must be a function');
 
     this.resultHandlers[resultHandlerKey(dialog, tag)] = fn;
   }
 
   getResultHandler(dialog, tag) {
-    tag = tag || any;
-    return this.resultHandlers[resultHandlerKey(dialog, tag)];
+    var result = this.resultHandlers[resultHandlerKey(dialog, tag)];
+    if (result) {
+      return result;
+    } else if (!tag || tag=='') {
+      // try default handler
+      return this.resultHandlers[resultHandlerKey(dialog)];
+    }
   }
 
   /**
@@ -204,7 +208,7 @@ export default class Dialog {
 }
 
 function resultHandlerKey(dialog, tag) {
-  if (tag) {
+  if (tag && tag!='') {
     return `${dialog}|${tag}`;
   } else {
     return dialog;

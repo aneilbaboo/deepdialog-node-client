@@ -2,6 +2,7 @@ import App from './app';
 import {isString, isObject} from 'util';
 import assert from 'assert';
 import log from './log';
+import {any} from './constants';
 
 export default class Session {
   constructor({app, id, globals, accessToken, currentFrame}) {
@@ -16,13 +17,17 @@ export default class Session {
   }
 
   _updateValues({id, globals, accessToken, currentFrame}) {
-    var {id:frameId, dialog, locals, tag} = currentFrame || {};
+    var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
     this._dialogName = dialog;
     this._tag = tag;
     this._globals = globals || {};
+    if (dialogApp) {
+      this._dialogAppId = dialogApp.id;
+      this._dialogAppName = dialogApp.name;
+    }
     this.locked = false;
     this._accessToken = accessToken;
     this._client = accessToken ? this.app.client.clientWithAccessToken(accessToken) : this.app.client;
@@ -45,6 +50,8 @@ export default class Session {
   get locals() { return this._locals; }
   get dialogName() { return this._dialogName; }
   get dialog() { return this.app.getDialog(this.dialogName); }
+  get dialogAppId() { return this._dialogAppId; }
+  get dialogAppName() { return this._dialogAppName; }
   get tag() { return this._tag; }
   get accessToken() { return this._accessToken; }
 
@@ -110,12 +117,9 @@ export default class Session {
       sessionId: this.id,
       parentId: this.frameId,
       dialog: dialog,
+      tag: tag,
       globals: this.globals
     };
-
-    if (tag) {
-      graphQLVars.tag = tag;
-    }
 
     if (locals) {
       graphQLVars.locals = locals;
