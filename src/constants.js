@@ -1,1 +1,1 @@
-export const any = "_";
+export const anyPattern = "_";

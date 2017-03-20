@@ -1,7 +1,7 @@
 import {isString, isFunction, isObject} from 'util';
 import assert from 'assert';
 
-import {any} from './constants';
+import {anyPattern} from './constants';
 export default class Dialog {
 
   constructor({name, description, nlpModelName}) {
@@ -135,7 +135,7 @@ export default class Dialog {
           return false;
         }
       } else {
-        if (pval!=any && pval!=dval) {
+        if (pval!=anyPattern && pval!=dval) {
           return false;
         }
       }
@@ -189,7 +189,7 @@ export default class Dialog {
     });
 
     function extractPattern(h) {
-      return isFunction(h[0]) ? any : h[0];
+      return isFunction(h[0]) ? anyPattern : h[0];
     }
 
     var inputHandlerPatterns = this.inputHandlers.map(extractPattern);

@@ -2,7 +2,6 @@ import App from './app';
 import {isString, isObject} from 'util';
 import assert from 'assert';
 import log from './log';
-import {any} from './constants';
 
 export default class Session {
   constructor({app, id, globals, accessToken, currentFrame}) {
