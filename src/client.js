@@ -3,29 +3,33 @@ import {Transport} from 'lokka-transport-http';
 
 import log from './log';
 
-const GraphQLAPIURL = 'http://apistaging.deepdialog.ai/graphql';
+const GraphQLAPIURL = 'https://api.deepdialog.ai/graphql';
 
 export default class Client {
-  constructor(appId, appSecret, serverURL) {
-    serverURL = serverURL || GraphQLAPIURL;
+  constructor(appId, accessToken, serverURL) {
+    this.serverURL = serverURL || GraphQLAPIURL;
     this.appId = appId;
-    this.appSecret = appSecret;
+    this.accessToken = accessToken;
     var headers = {
-      'Authorization': `Bearer ${appSecret}`
+      'Authorization': `Bearer ${accessToken}`
     };
 
     this.client = new Lokka({
-      transport: new Transport(serverURL, { headers: headers })
+      transport: new Transport(this.serverURL, { headers: headers })
     });
   }
 
   async query(op, vars) {
-    log.debug('GraphQL Query\nVariables: %j\nOp: %j', vars, op);
-    return await this.client.query(op, vars).catch(function(e) { throw e; }); 
+    log.debug('GraphQL Query\nVariables: %j\nOp: %s', vars, op);
+    return await this.client.query(op, vars).catch(function(e) { throw e; });
   }
 
   async mutate(op, vars) {
-    log.debug('GraphQL Mutation\nVariables: %j\nOp: %j', vars, op);
+    log.debug('GraphQL Mutation\nVariables: %j\nOp: %s', vars, op);
     return await this.client.mutate(op, vars);
+  }
+
+  clientWithAccessToken(accessToken) {
+    return new Client(this.appId, accessToken, this.serverURL);
   }
 }

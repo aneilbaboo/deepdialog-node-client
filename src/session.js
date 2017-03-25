@@ -4,22 +4,32 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor({app, id, globals, currentFrame}) {
+  constructor({app, id, globals, accessToken, currentFrame}) {
     assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
     this._app = app;
-    this._updateValues({id:id, globals:globals, currentFrame:currentFrame});
+    this._updateValues({
+      id:id,
+      globals:globals,
+      accessToken:accessToken || app.appSecret,
+      currentFrame:currentFrame});
   }
 
-  _updateValues({id, globals, currentFrame}) {
-    var {id:frameId, dialog, locals, tag} = currentFrame || {};
+  _updateValues({id, globals, accessToken, currentFrame}) {
+    var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
     this._dialogName = dialog;
     this._tag = tag;
     this._globals = globals || {};
+    if (dialogApp) {
+      this._dialogAppId = dialogApp.id;
+      this._dialogAppName = dialogApp.name;
+    }
     this.locked = false;
+    this._accessToken = accessToken;
+    this._client = accessToken ? this.app.client.clientWithAccessToken(accessToken) : this.app.client;
   }
 
   validate() {
@@ -32,15 +42,17 @@ export default class Session {
   }
 
   get app() { return this._app; }
-  get client() { return this._app.client; }
+  get client() { return this._client; }
   get id() { return this._id; }
   get globals() { return this._globals; }
   get frameId() { return this._frameId; }
   get locals() { return this._locals; }
   get dialogName() { return this._dialogName; }
   get dialog() { return this.app.getDialog(this.dialogName); }
+  get dialogAppId() { return this._dialogAppId; }
+  get dialogAppName() { return this._dialogAppName; }
   get tag() { return this._tag; }
-
+  get accessToken() { return this._accessToken; }
 
   /**
    * get - gets a global or local variable
@@ -104,12 +116,9 @@ export default class Session {
       sessionId: this.id,
       parentId: this.frameId,
       dialog: dialog,
+      tag: tag,
       globals: this.globals
     };
-
-    if (tag) {
-      graphQLVars.tag = tag;
-    }
 
     if (locals) {
       graphQLVars.locals = locals;
@@ -165,7 +174,7 @@ export default class Session {
         result: result
       });
 
-      log.debug('Session#finish() => %j | dialog:%s frame:%s session:%s',
+      log.debug('Session#finish() mutation complete. Result => %j | dialog:%s frame:%s session:%s',
         response, this.dialogName, this.frameId, this.id);
 
     } catch (e) {

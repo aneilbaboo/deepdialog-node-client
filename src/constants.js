@@ -1,1 +1,1 @@
-export const any = "{*}";
+export const anyPattern = "_";

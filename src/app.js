@@ -12,6 +12,7 @@ export default class App {
   constructor({appId, appSecret, mainDialog, hostURL, deepDialogServer}) {
     deepDialogServer = deepDialogServer || 'https://api.deepdialog.ai';
     var ddGraphQLURL = url.resolve(deepDialogServer, 'graphql');
+    this._id = appId;
     this._client = new Client(appId, appSecret, ddGraphQLURL);
     this._dialogs = {};
     this._nlpModels = {};
@@ -21,6 +22,7 @@ export default class App {
     this.https = true;
   }
 
+  get id() { return this._id; }
   get mainDialog() { return this._mainDialog; }
   set mainDialog(val) { this._mainDialog = val; }
 
@@ -197,7 +199,7 @@ export default class App {
     if (startHandler) {
       await Promise.resolve(startHandler(session, session.locals, notification));
     } else {
-      log.warn('Couldn\'t find start handler for dialog %s', dialog.name);
+      log.warn("Couldn't find start handler for dialog %s", dialog.name);
     }
   }
 
@@ -216,17 +218,19 @@ export default class App {
   }
 
   async handleFrameResult(session, notification) {
-    var dialog = session.dialog;
     var completedFrame = notification.session.completedFrame[0];
-    var resultHandler = dialog.getResultHandler(completedFrame.dialog, completedFrame.tag);
-
+    var completedDialogRef = (this.id!=completedFrame.dialogApp.id
+          // completed frame is remote - lookup using the remote app name
+          ? `${completedFrame.dialogApp.name}:${completedFrame.dialog}`
+          : completedFrame.dialog);
+    var resultHandler = session.dialog.getResultHandler(completedDialogRef, completedFrame.tag);
     log.info('Received frame_result for session: %s notification: %j', session.id, notification);
 
     if (resultHandler) {
       await Promise.resolve(resultHandler(session, completedFrame.result, notification));
     } else {
-      log.error("Couldn't find result handler for %s|%s in dialog %s",
-      completedFrame.dialog, completedFrame.tag, dialog.name);
+      log.error("Couldn't find result handler for %s in dialog %s in result handlers: %j",
+        completedDialogRef, session.dialogName, Object.keys(session.dialog.resultHandlers));
     }
   }
 
@@ -234,6 +238,7 @@ export default class App {
     var currentFrame = data.matchedFrame || data.session.stack[0];
     return new Session({
       app: this,
+      accessToken: data.accessToken,
       id: data.session.id,
       globals: data.session.globals,
       currentFrame: currentFrame
