@@ -34,7 +34,12 @@ export default class App {
 
   get webhook() {
     if (this.hostURL) {
+      if (!/^https?:\/\//.test(this.hostURL)) {
+        throw new Error(`Invalid App.hostURL: ${this.hostURL}. Expecting https?://`);
+      }
       return url.resolve(this.hostURL,'webhook');
+    } else {
+      throw new Error('App.hostURL must be set');
     }
   }
 
