@@ -1,3 +1,5 @@
+import jwt from 'jwt-simple';
+
 import App from './app';
 import {isString, isObject} from 'util';
 import assert from 'assert';
@@ -286,6 +288,20 @@ export default class Session {
     }
   }
 
+
+  /**
+   * reset - Description
+   *
+   * @param  {Object}   params
+   * @param  {string}   params.sessionId either sessionId
+   * @param  {frameId}  params.frameId identifies the frame to reset to, if not
+   *                       provided, the earliest active frame is used.  Unless
+   *                       something exotic occurred, this will be the first frame
+   *                       containing the mainDialog dialog
+   * @param  {boolean}  params.globals reset the global variables?
+   *
+   * @return {none}
+   */
   async reset(params) {
     params = params || {};
 
@@ -304,5 +320,72 @@ export default class Session {
       params, result, this.dialogName, this.frameId, this.id);
     var session = result.sessionReset;
     this._updateValues({currentFrame: session.stack[0], ...session});
+  }
+
+  /**
+   * postback- Returns a postback object to the current dialog
+   *
+   * @param {string} dialog Description
+   * @param {string} method Description
+   *
+   * @return {string} Description
+   */
+  postbackToken(method, args) {
+    var body = {
+      appId: this.app.appId,
+      sessionId: this.id,
+      frameId: this.frameId,
+      method: method
+    };
+    if (args) {
+      body.args = args;
+    }
+
+    return jwt.encode(body, this.app.appSecret);
+  }
+
+  /**
+   * postbackActionButton
+   *
+   * @param {string} dialog Description
+   * @param {string} method The name of the onPostback method provided by the dialog
+   * @param {type} text   Description
+   *
+   * @return {Object} Suitable for inclusion in the list of actions of a
+   *                  carousel or list style message
+   */
+  postbackActionButton(method, text, args) {
+    return {
+      type: 'postback',
+      text: text,
+      payload: this.postbackToken(method, args)
+    };
+  }
+
+  /**
+   * invokePostback - given a postback object or a postback token, invokes the
+   *
+   * @param {string} postbackToken
+   * @param {Object} args
+   *
+   * @return {Object} the data returned by the postback
+   */
+  async invokePostback(postbackToken, args) {
+    log.debug('Session.invokePostback %s %j', postbackToken, args);
+    var header = jwt.decode(postbackToken, "", true);
+    if (header.args && args) {
+      throw new Error(`Invalid Postback arguments. Token already contains arguments: ${header.args}`);
+    }
+
+    var rawResult= await this.client.mutate(`($token: String, $args: JSON) {
+      sessionInvokePostback(token: $token, args: $args) }`,
+      {
+        token: postbackToken,
+        args: args
+      }
+    );
+    if (rawResult) {
+      return rawResult.sessionInvokePostback;
+    }
   }
 }

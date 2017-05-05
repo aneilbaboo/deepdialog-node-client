@@ -55,6 +55,7 @@
     "compression": "1.6.2",
     "express": "4.14.0",
     "express-promise-router": "1.1.1",
+    "jwt-simple": "0.5.1",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
     "morgan": "1.8.1",
