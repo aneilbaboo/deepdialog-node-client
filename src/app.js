@@ -26,6 +26,8 @@ export default class App {
   get mainDialog() { return this._mainDialog; }
   set mainDialog(val) { this._mainDialog = val; }
 
+  get appId() { return this.client.appId; }
+  get appSecret() { return this.client.accessToken; }
   get hostURL() { return this._hostURL; }
   set hostURL(val) { this._hostURL = val; }
 
@@ -151,20 +153,17 @@ export default class App {
   //
 
   async handleNotification(notification) {
-    var promises = [];
     log.silly('Handling notification: %j', notification);
     var appHandler = this._eventHandlers[event];
     var event = notification.event;
 
     if (appHandler) {
-      promises.push(appHandler);
+      appHandler(notification);
     }
 
     if (event.startsWith('frame_')) {
-      promises.push(this.handleFrameEvent(notification));
+      return await this.handleFrameEvent(notification);
     }
-
-    await Promise.all(promises);
   }
 
 
@@ -179,21 +178,25 @@ export default class App {
     var event = notification.event;
 
     switch (event) {
+      case 'frame_input':
+        await this.handleFrameInput(session, notification);
+        return {handled: true};
+
       case 'frame_start':
         await this.handleFrameStart(session, notification);
-        break;
+        return {handled: true};
 
       case 'frame_result':
         await this.handleFrameResult(session, notification);
-        break;
+        return {handled: true};
 
-      case 'frame_input':
-        await this.handleFrameInput(session, notification);
-        break;
+      case 'frame_postback':
+        var result = await this.handleFramePostback(session, notification);
+        return {handled: true, result: result};
 
       case 'frame_default':
         await this.handleFrameDefault(session, notification);
-        break;
+        return {handled: true};
     }
   }
 
@@ -236,6 +239,23 @@ export default class App {
     } else {
       log.error("Couldn't find result handler for %s in dialog %s in result handlers: %j",
         completedDialogRef, session.dialogName, Object.keys(session.dialog.resultHandlers));
+    }
+  }
+
+  async handleFramePostback(session, notification) {
+    var dialogName = notification.postback.session.stack[0].dialog;
+    var dialog = this.getDialog(dialogName);
+    var postbackHandlerName = notification.postback.method;
+    var postbackHandler = dialog.getPostbackHandler(postbackHandlerName);
+
+    if (postbackHandler) {
+      return await postbackHandler(
+        session,
+        notification.postback.args,
+        notification);
+    } else {
+      log.error("Couldn't find postback handler %s in dialog %s in postback handlers: %j",
+        postbackHandlerName, dialogName, Object.keys(dialog.postbackHandlers));
     }
   }
 

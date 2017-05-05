@@ -71,9 +71,8 @@ export default class AppServer {
       if (notifications) {
         log.info('Processing notifications: %j', notifications);
         try {
-          await Promise.all(notifications.map((n)=>app.handleNotification(n)));
-          res.status(200).send({handled:true});
-          return;
+          var result = await Promise.all(notifications.map((n)=>app.handleNotification(n)));
+          res.status(200).send(result);
         } catch (e) {
           res.status(500).send({error: { statusCode: 500, message: 'Internal server error' } });
           log.error(e);

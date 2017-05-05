@@ -4,6 +4,8 @@ Bot building superpowers.
 
 ### Get started
 
+Step by step instructions - or checkout the starter bot:
+
 #### 1. Write Dialogs
 
 ```javascript
@@ -26,7 +28,12 @@ MainDialog.onText(/hello.*/, async function (session, text) {
 });
 
 ```
+
 #### 2. Create the App
+
+```
+
+```
 
 #### 3. Start the App Server
 
@@ -34,21 +41,158 @@ MainDialog.onText(/hello.*/, async function (session, text) {
 
 ## How it works
 
-DeepDialog gives you bot building superpowers.  Write reusable a complex
-chatbot into smaller pieces which can be reused and call each other.  These
-building blocks are called dialogs.  
+DeepDialog helps you write more sophisticated chatbots.  Currently, you can
+connect to Facebook, Twitter, WhatsApp, Kik and many other services
+through Smooch.io.  
 
-At any point in a conversation with a user, one dialog has control, and responds
-to events like button presses, raw text, or text processed by a natural language
-processing engine.  
+### Dialogs: Functions for Conversational Logic
 
-Any messages sent will be processed by that dialog.  You can break down a complex
-problem into many smaller dialogs.  
+In DeepDialog, you create and deploy apps to the web.  An app is a container
+for dialogs, which are bits of reusable conversational logic that are modeled
+on functions.  Similar to how functions call functions, dialogs can start other
+dialogs.  When a dialog finishes, it returns a value to the dialog that started
+it.  
+
+At any point in a conversation, one dialog is in control.  When a user first
+interacts with your app, the app's main dialog gets control.  As the main dialog
+interacts with the user, it can choose to start other dialogs, including dialogs
+provided by other DeepDialog apps.  As a bot developer this allows you to
+develop and reuse conversational logic that same way you do with functions.  
+
+### Postbacks
+
+#### Postback buttons
+Here, we create two postback buttons which call the subscribe postback.  Note
+how we include an argument in the postback token.
+
+```javascript
+MainDialog.onText("hello", async (session) => {
+  session.send({
+    text: "Which plan do you want to subscribe to?",
+    actions: [
+      session.postbackActionButton('subscribe', 'Premium', {subscriptionLevel:"premium"}),
+      session.postbackActionButton('subscribe', 'Basic', {subscriptionLevel:"basic"})
+    ]
+  });
+});
+
+MainDialog.onPostback('subscribe', async (session, args) => {
+  var result = await myBackend.subscribe(args.subscriptionLevel); // premium or Basic
+  await session.send(`Congrats, you are subscribed at level ${args.subscriptionLevel}`);
+  return result; // true or false
+});
+```
+
+#### Higher order programming using postbacks
+
+Just like you pass functions as arguments in modern programming languages,
+you can pass a postback to other dialogs which is an easy way to invoke a piece
+of code across dialogs or even across separate apps.
+
+In this somewhat contrived example, the main dialog starts a generic dialog
+optimized for upselling customers, passing it a postback token.  The
+UpsellDialog invokes the postback handler when the user says they want to buy
+a particular plan.
+
+```javascript
+MainDialog.onIntent('enjoyed_freemium', async (session) => {
+  await session.start('UpsellDialog', {
+    subscription: session.postbackToken('subscribe');
+  });
+});
+
+// Generic UpsellDialog can invoke the postback in the MainDialog
+// Note how the upsell dialog passes parameters back to the postback
+UpsellDialog.onIntent('wants_to_subscribe', async (session, args)=> {
+  var result = await session.invokePostback(session.get('subscription'), {subscriptionLevel: args.subscription.level});
+  // result will be true or false
+});
+```
+
+#### Arguments to the postback handler
+
+```javascript
+MainDialog.onPostback(async (session, args, notification) {
+  // session = the current user's session
+  // args = args provided in
+});
+```
+
 
 ## Classes
 
-### Dialog
+This library provides the following classes.
 
+### App
+Represents an app on the deepdialog server. Each app contains many dialogs,
+and provides facilities for resetting its state.
+
+#### getSessions
+
+```javascript
+app.getSessions({id, limit, before});
+```
+If `id` is provided, a single session is returned.
+If `before` is provided, sessions with ids lexicographically before this are returned.
+If `limit` is provided, up to that many sessions is returned (or up to the API's limit)
+
+##### Examples
+```javascript
+// loop through all sessions in the app
+var sessions = await app.getSessions();
+while (sessions && sessions.length>0) {
+  // do something
+
+  // get next page
+  let lastSession = sessions[sessions.length-1];
+  sessions = await app.getSessions({before: lastSession.id});
+}
+```
+
+### AppServer
+Encapsulates a web server which allows your app to respond to events from the
+DeepDialog service.
+
+### Dialog
+An app contains a set of uniquely named dialogs.  Developers specify handlers
+which are called at different parts of the dialog's life cycle.
+
+#### onStart
+#### onInput
+#### onResult
+```javascript
+
+```
+#### onPostback
+Names a postback handler.  
+
+```javascript
+MyDialog.onPostback(methodName, async (session, args, notification) {
+  // session of the current user
+  // args - arguments provided in the postback token or while invoking
+  //        the postback
+  // notification - an object of the structure:
+  //      {
+  //        session { ... } // data about the current user session
+  //        message { ... } // optional data about the message that associated
+  //                        // with this postback (e.g., the message which
+  //                        // displayed the postback button)
+  //        postback {
+  //          id // the postback's id
+  //          session {
+  //            // the session which created the postback
+  //            // usually, the same as the user's session, but may be different
+  //            // e.g., when an item containing a postback button
+  //            //   is shared to another user
+  //            id: string,
+  //            globals: Object
+  //            stack: [ {
+  //              id: string, locals: Object, tag:string, status:string
+  //            } ]
+  //          }
+  //        }
+});
+```
 ### Session
 
 #### send
@@ -94,29 +238,5 @@ await session.reset({globals:true, locals:true}); // completely reset the sessio
 
 ```javascript
 await session.reset({frameId:session.frameId}); // useful during recovery
-                                                // conversation starts at current frame
-```
-
-### App
-
-#### getSessions
-
-```javascript
-app.getSessions({id, limit, before});
-```
-If `id` is provided, a single session is returned.
-If `before` is provided, sessions with ids lexicographically before this are returned.
-If `limit` is provided, up to that many sessions is returned (or up to the API's limit)
-
-##### Examples
-```javascript
-// loop through all sessions in the app
-var sessions = await app.getSessions();
-while (sessions && sessions.length>0) {
-  // do something
-
-  // get next page
-  let lastSession = sessions[sessions.length-1];
-  sessions = await app.getSessions({before: lastSession.id});
-}
+              // conversation starts at the current frame frameId
 ```

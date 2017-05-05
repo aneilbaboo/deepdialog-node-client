@@ -2,6 +2,7 @@ import {isString, isFunction, isObject} from 'util';
 import assert from 'assert';
 
 import {anyPattern} from './constants';
+
 export default class Dialog {
 
   constructor({name, description, nlpModelName}) {
@@ -13,6 +14,7 @@ export default class Dialog {
     this.startHandler = null;
     this.inputHandlers = [];
     this.resultHandlers = {};
+    this.postbackHandlers = {};
   }
 
   get nlpModelName() { return this._nlpModelName; }
@@ -74,6 +76,13 @@ export default class Dialog {
   }
 
   /**
+   * This is called when a frame_input notification is received
+   * @callback Dialog~inputHandler
+   * @param  {Session} session
+   * @return {Object} input notification body
+   */
+
+  /**
    * onInput - low level function for matching arbitrary patterns in the data
    *            component of a frame_input notification
    *
@@ -106,6 +115,26 @@ export default class Dialog {
   }
 
   /**
+   * This is called when a frame_postback notification is received
+   * @callback Dialog~postbackHandler
+   * @param  {Session} session
+   * @param  {Object} args argument provided to the postback
+   * @param {Object} notification postback notification body containing session, message, postback keys
+   */
+
+  /**
+   * onPostback - Description
+   *
+   * @param {string} name Name of the postback method
+   * @param {Dialog~postbackHandler} fn   Description
+   *
+   * @return {type} Description
+   */
+  onPostback(name, fn) {
+    this.postbackHandlers[name] = fn;
+  }
+
+  /**
    * getInputHandler
    *
    * @param  {type} inputData description
@@ -117,6 +146,18 @@ export default class Dialog {
         return [hfn, hextractor];
       }
     }
+  }
+
+
+  /**
+   * getPostbackHandler - Description
+   *
+   * @param {type} method Description
+   *
+   * @return {Dialog~postbackHandler} Description
+   */
+  getPostbackHandler(method) {
+    return this.postbackHandlers[method];
   }
 
   /**
@@ -188,6 +229,8 @@ export default class Dialog {
       return {dialog: dialog, tag: tag};
     });
 
+    var postbackHandlers = Object.keys(this.postbackHandlers);
+
     function extractPattern(h) {
       return isFunction(h[0]) ? anyPattern : h[0];
     }
@@ -198,13 +241,15 @@ export default class Dialog {
       name: this.name,
       startHandler: !!this.startHandler,
       resultHandlers: resultHandlerValues || [],
-      inputHandlers: inputHandlerPatterns || []
+      inputHandlers: inputHandlerPatterns || [],
+      postbackHandlers: postbackHandlers
     };
     if (this.nlpModelName) {
       result.nlpModelName = this.nlpModelName;
     }
     return result;
   }
+
 }
 
 function resultHandlerKey(dialog, tag) {
