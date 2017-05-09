@@ -9,7 +9,7 @@ Step by step instructions - or checkout the starter bot:
 #### 1. Write Dialogs
 
 ```javascript
-# maindialog.js
+// maindialog.js
 import {Dialog} from 'deepdialog';
 
 export const MainDialog = new Dialog({
@@ -31,10 +31,9 @@ MainDialog.onText(/hello.*/, async function (session, text) {
 
 #### 2. Create the App
 
-```
+```javascript
 
 ```
-
 #### 3. Start the App Server
 
 #### 4. Synchronize your App with DeepDialog
@@ -218,6 +217,12 @@ If the optional `result` is provided, it is sent to the parent dialog's onResult
 
 #### reset
 Resets the stack, locals and/or global variables of the session.
+
+#### userFullName
+
+```javascript
+session.userFullName // returns the user's name
+```
 
 ```javascript
 await session.reset({globals:Boolean, locals:Boolean, frameId:String});

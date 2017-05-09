@@ -18,12 +18,15 @@ export default class Session {
   }
 
   _updateValues({id, globals, accessToken, currentFrame}) {
-    var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
+    var {id:frameId, dialog, username, userFullName, email, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
     this._dialogName = dialog;
     this._tag = tag;
+    this._username = username;
+    this._userFullName = userFullName;
+    this._email = email;
     this._globals = globals || {};
     if (dialogApp) {
       this._dialogAppId = dialogApp.id;
@@ -55,6 +58,9 @@ export default class Session {
   get dialogAppName() { return this._dialogAppName; }
   get tag() { return this._tag; }
   get accessToken() { return this._accessToken; }
+  get username() { return this._username; }
+  get userFullName() { return this._userFullName; }
+  get email() { return this._email; }
 
   /**
    * get - gets a global or local variable
@@ -137,7 +143,7 @@ export default class Session {
           $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
         sessionStartFrame(sessionId: $sessionId, parentId: $parentId,
           dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
-          id globals
+          id globals username userFullName email
           stack(limit: 1) { id dialog tag locals }
         }
       }`, graphQLVars);
@@ -199,7 +205,7 @@ export default class Session {
     this.checkLock();
     var result = await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
       sessionUpdate(sessionId: $sessionId, locals: $locals, globals: $globals) {
-        id globals
+        id globals username userFullName email
         stack(limit: 1) { id dialog tag locals }
       }
     }`, {
@@ -310,7 +316,8 @@ export default class Session {
     assert(this.app, 'app is not defined!');
     var result = await this.client.mutate(`($sessionId: String, $frameId: String, $globals: Boolean, $locals: Boolean) {
       sessionReset(sessionId: $sessionId, frameId: $frameId, globals: $globals, locals: $locals) {
-        id globals stack { id dialog tag locals }
+        id globals username userFullName email
+        stack { id dialog tag locals }
       }
     }`, {
       ...params,
@@ -340,8 +347,12 @@ export default class Session {
     if (args) {
       body.args = args;
     }
+    var secret = this.app.appSecret;
 
-    return jwt.encode(body, this.app.appSecret);
+    if (!secret) {
+      throw new Error('App secret must be defined, but is %s', secret);
+    }
+    return jwt.encode(body, secret);
   }
 
   /**
