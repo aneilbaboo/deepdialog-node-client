@@ -198,7 +198,141 @@ MyDialog.onPostback(methodName, async (session, args, notification) {
 Sends a message to the user.
 
 ```javascript
-await session.send({text, type, mediaUrl, mediaType, actions, items});
+await session.send({type, text, mediaUrl, mediaType, actions, items});
+```
+
+* type - string, one of 'text', 'image', 'list', 'carousel'.  This value is inferred for text and image type messages (see Message Types below)
+* text - string, text to be displayed
+* mediaUrl - string, url to image or video
+* mediaType - string, mimeType inferred if mediaUrl contains a recognized mimeType
+* actions - array of Objects representing action buttons (see Actions below)
+* items - array of Objects representing message items in list or carousel format (see Message Items below)
+
+##### send: Message types
+* text - text only message
+* image - image or video (mediaUrl must be set)
+* list - one or more vertically scrollable message items (items must be provided)
+* carousel - one or more horizontal scrollable message items (items must be provided)
+
+##### send: Actions
+Actions are clickable buttons of different types:
+* reply - quick reply button which disappears after being pressed
+* link - opens a link in a web browser
+* postback - invokes a postback handler
+* share - opens a dialog that permits sharing of the message or message item with another user
+* buy - enables the user to buy the item represented in the message item
+* locationRequest - gets the location of the user
+
+Each action type has a different structure.
+
+###### send: Reply Action Button
+```javascript
+{
+  type: 'reply',
+  text: 'Yes',
+  payload: 'replied_yes'
+}
+```
+
+###### send: Link Action Button
+```javascript
+{
+  type: 'link',
+  text: 'Open Google',
+  uri: 'https://google.com'
+}
+```
+
+###### send: Postback Action Button
+```javascript
+{
+  type: 'postback',
+  text: 'Save Settings',
+  payload: session.postbackToken('saveSettings', {preferences:'basic'})
+}
+// which is equivalent to
+session.postbackActionButton('SaveSettings', 'saveSettings')
+```
+
+Where the postback handler was defined in the dialog as follows:
+
+```javascript
+MyDialog.onPostback('SaveSettings', async (session, args, notification) {
+  // args will be {preferences:'basic'}
+});
+```
+
+###### send: Share Button
+```javascript
+{
+  type: 'share'  // note: button text is always "Share"
+                 // cannot be set to custom value
+}
+```
+
+###### send: Buy Action Button
+```javascript
+{
+  type: 'buy',
+  amount: 1000, // specified in cents (1000 = $10.00)
+  currency: 'USD' // see https://support.stripe.com/questions/which-currencies-does-stripe-support
+}
+```
+
+###### send: LocationRequest Action Button
+```javascript
+{
+  type: 'locationRequest',
+  text: 'Share Location'
+}
+```
+
+##### send: Message Items
+```javascript
+{
+  mediaUrl: 'http://images.com/someimage.jpg', // optional
+  mediaType: 'image/jpeg', // inferred if not provided
+  title: 'bold text', // 80 chars max
+  description: 'lighter text below title', // 80 chars max
+  actions: [ {...} ], // optional array of action objects
+}
+```
+
+##### send: Carousel / List example
+```javascript
+session.send({
+  type: 'carousel', // or list
+  text: "Here are some choices",
+  actions: [{
+    type: 'postback',
+    text: "Show More",
+    payload: session.
+  },
+  items: [
+    {
+      title: 'First Choice',
+      description: 'Explain Choice1',
+      mediaUrl: 'https://mysite.com/images/choice1.jpeg',
+      actions: [
+        {
+          type: 'link',
+          uri: 'https://mysite.com/information/choice1.html'
+        }
+      ]
+    },
+    {
+      title: 'Second Choice',
+      description: 'Explain Choice2',
+      mediaUrl: 'https://mysite.com/images/choice2.jpeg',
+      actions: [
+        {
+          type: 'link',
+          uri: 'https://mysite.com/information/choice2.html'
+        }
+      ]
+  }
+]
+});
 ```
 
 #### start
@@ -207,6 +341,8 @@ Starts a dialog, transferring control to it. The dialog's onStart handler will b
 ```javascript
 await session.start(dialog, [locals, [tag]]);
 ```
+
+* dialog - string,
 #### finish
 Called to end the current dialog, transferring control back to the dialog that called it.
 
