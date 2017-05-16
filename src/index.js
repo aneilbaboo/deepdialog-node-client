@@ -6,5 +6,6 @@ import NLPModel from './nlp-model';
 import Session from './session';
 import log from './log';
 import {anyPattern as any} from './constants';
+import {sleep} from './util';
 
-export { App, AppServer, Client, Dialog, NLPModel, Session, log, any };
+export { App, AppServer, Client, Dialog, NLPModel, Session, log, any, sleep };

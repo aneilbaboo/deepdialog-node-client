@@ -90,7 +90,7 @@ export default class App {
           if (n instanceof NLPModel) {
             this._nlpModels[n.name] = n;
           } else {
-            throw new Error(`Expecting a NLPModel instance, but reecived ${n}`);
+            throw new Error(`Expecting a NLPModel instance, but received ${n}`);
           }
 
         }
