@@ -186,7 +186,7 @@ MyDialog.onPostback(methodName, async (session, args, notification) {
   //            id: string,
   //            globals: Object
   //            stack: [ {
-  //              id: string, locals: Object, tag:string, status:string
+  //              id: string, locals: Object, tag:string
   //            } ]
   //          }
   //        }

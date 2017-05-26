@@ -3,8 +3,12 @@ import dotEnv from 'dotEnv';
 import rp from 'request-promise';
 
 import {App, Session, Dialog, NLPModel, Client, log} from '..';
-
-dotEnv.config();
+log.level = 'silly';
+try {
+  dotEnv.config();
+} catch (e) {
+  log.warn("Unable to load .env file");
+}
 
 async function query(op, vars) {
   // check app data
