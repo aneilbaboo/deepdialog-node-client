@@ -253,10 +253,10 @@ export default class Session {
     }
 
     if (!type) {
-      if (text) {
-        type = 'text';
-      } else if (mediaUrl) {
-        type == 'image'; // smooch message type, not mediaType
+      if (mediaUrl) {
+        type = 'image';
+      } else if (text) {
+        type = 'text'; // smooch message type, not mediaType
       } else {
         throw new Error(`Unable to send message: type not provided and cannot be inferred`);
       }
