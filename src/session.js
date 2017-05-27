@@ -6,26 +6,27 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor({app, id, globals, accessToken, currentFrame}) {
+  constructor({app, id, globals, username, email, displayName, givenName, surname, accessToken, currentFrame}) {
     assert(app.constructor==App, 'app must be an App instance');
     assert(id, 'id (session.id)');
     this._app = app;
     this._updateValues({
-      id:id,
-      globals:globals,
-      accessToken:accessToken || app.appSecret,
-      currentFrame:currentFrame});
+      id, globals, currentFrame,
+      username, displayName, email, givenName, surname,
+      accessToken:accessToken || app.appSecret});
   }
 
-  _updateValues({id, globals, accessToken, currentFrame}) {
-    var {id:frameId, dialog, username, userFullName, email, locals, tag, dialogApp} = currentFrame || {};
+  _updateValues({id, globals, accessToken, currentFrame, username, email, displayName, givenName, surname}) {
+    var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
     this._dialogName = dialog;
     this._tag = tag;
     this._username = username;
-    this._userFullName = userFullName;
+    this._displayName = displayName;
+    this._givenName = givenName;
+    this._surname = surname;
     this._email = email;
     this._globals = globals || {};
     if (dialogApp) {
@@ -59,7 +60,9 @@ export default class Session {
   get tag() { return this._tag; }
   get accessToken() { return this._accessToken; }
   get username() { return this._username; }
-  get userFullName() { return this._userFullName; }
+  get displayName() { return this._displayName; }
+  get givenName() { return this._givenName; }
+  get surname() { return this._surname; }
   get email() { return this._email; }
 
   /**
@@ -143,7 +146,7 @@ export default class Session {
           $dialog: String, $tag: String, $locals: JSON, $globals: JSON) {
         sessionStartFrame(sessionId: $sessionId, parentId: $parentId,
           dialog: $dialog, tag: $tag, locals: $locals, globals: $globals) {
-          id globals username userFullName email
+          id globals username displayName givenName surname email
           stack(limit: 1) { id dialog tag locals }
         }
       }`, graphQLVars);
@@ -205,7 +208,7 @@ export default class Session {
     this.checkLock();
     var result = await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
       sessionUpdate(sessionId: $sessionId, locals: $locals, globals: $globals) {
-        id globals username userFullName email
+        id globals username displayName givenName surname email
         stack(limit: 1) { id dialog tag locals }
       }
     }`, {
@@ -316,7 +319,7 @@ export default class Session {
     assert(this.app, 'app is not defined!');
     var result = await this.client.mutate(`($sessionId: String, $frameId: String, $globals: Boolean, $locals: Boolean) {
       sessionReset(sessionId: $sessionId, frameId: $frameId, globals: $globals, locals: $locals) {
-        id globals username userFullName email
+        id globals username displayName givenName surname email
         stack { id dialog tag locals }
       }
     }`, {

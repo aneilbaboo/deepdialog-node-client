@@ -354,7 +354,14 @@ If the optional `result` is provided, it is sent to the parent dialog's onResult
 #### reset
 Resets the stack, locals and/or global variables of the session.
 
-#### userFullName
+### Useful properties of the session
+
+* username
+* displayName - usually, first + last name
+* givenName
+* surname
+* email
+
 
 ```javascript
 session.userFullName // returns the user's name
