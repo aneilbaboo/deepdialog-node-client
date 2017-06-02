@@ -266,6 +266,10 @@ export default class App {
       accessToken: data.accessToken,
       id: data.session.id,
       globals: data.session.globals,
+      username: data.session.username,
+      displayName: data.session.displayName,
+      givenName: data.session.givenName,
+      surname: data.session.surname,
       currentFrame: currentFrame
     });
   }
