@@ -241,6 +241,8 @@ export default class Session {
    * @param  {string}   type
    * @param  {Object[]} actions   an array of actionButtons
    * @param  {Object[]} items     an array of items
+   * @param  {Object}   displaySettings
+   * @param  {string}   displaySettings.imageAspectRatio - horizontal (default) or square
    * @return {Promise}
    */
   async send(params) {
@@ -252,7 +254,7 @@ export default class Session {
       text = params.text;
       type = params.type;
 
-      var {mediaUrl, mediaType, actions, items } = params;
+      var {mediaUrl, mediaType, actions, displaySettings, items } = params;
     }
 
     if (!type) {
@@ -271,20 +273,18 @@ export default class Session {
     this.checkLock();
 
     var result = await this.client.mutate(`($sessionId: String, $type: MessageType, $text: String,
-       $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput]) {
+       $mediaUrl: String, $mediaType: String, $actions: [ActionButtonInput], $items: [MessageItemInput],
+       $displaySettings: MessageDisplaySettingsInput) {
         messageSend(sessionId: $sessionId, type: $type, text: $text,
-          mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items) {
+          mediaUrl: $mediaUrl, mediaType: $mediaType, actions: $actions, items: $items,
+          displaySettings: $displaySettings) {
           id sessionId endpointInfo { messageId endpointId senderId recipientId }
-          actions
+          actions displaySettings { imageAspectRatio }
         }
     }`, {
       sessionId: this.id,
-      type: type,
-      text: text,
-      mediaUrl: mediaUrl,
-      mediaType: mediaType,
-      actions: actions,
-      items: items
+      type, text, mediaUrl, mediaType, actions, items,
+      displaySettings
     });
     log.debug('Session#send(...) => %j | dialog:%s session:%s frame:%s',
       result, this.dialogName, this.id, this.frameId);
