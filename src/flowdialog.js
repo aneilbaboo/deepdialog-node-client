@@ -1,8 +1,20 @@
-import {isObject, isString, isArray} from 'util';
+import {isObject, isString, isArray, isFunction} from 'util';
 import Dialog from './dialog';
 import {sleep} from './util';
 import log from './log';
 
+//
+// Definitions
+//
+// flows = { key: flow, *}
+// flow = flowCommand || [flowCommand*]
+// flowCommand = string || handler || flowObject
+// flowObject = waitCommand || messageCommand
+// waitCommand = { type: 'wait', seconds: float }
+// messageCommand = { type}
+// flowCommandType = text|image|list|carousel
+// handler = ([session [, path [, params]]]) => { }
+//
 export default class FlowDialog extends Dialog {
   constructor({flows, ...dialogArgs}) {
     super(dialogArgs);
@@ -45,8 +57,8 @@ export default class FlowDialog extends Dialog {
    * @return {Object} An object mapping to handler functions
    */
   _compileFlows(flows, path) {
+    log.silly('_compileFlows(',flows,')');
     flows = normalizeFlows(flows);
-    log.silly('_compileFlows(%j)', flows);
     path = path || [];
     var result = {};
     for (let id in flows) {
@@ -55,6 +67,7 @@ export default class FlowDialog extends Dialog {
       var handler = this._compileFlow(flow, flowPath);
       result[id] = handler;
     }
+    log.silly('_compileFlows(',flows,')=>',  result);
     return result;
   }
 
@@ -68,12 +81,14 @@ export default class FlowDialog extends Dialog {
    * @return {Function} returns a handler
    */
   _compileFlow(flow, path) {
+    log.silly('_compileFlow(',flow,')');
     flow = normalizeFlow(flow);
-    log.silly('_compileFlow(%j)', flow);
     var compiledCommands = [];
 
     for (let cmd of flow) {
-      if (isMessageType(cmd.type)) {
+      if (isFunction(cmd)) {
+        compiledCommands.push(cmd);
+      } else if (isMessageType(cmd.type)) {
         let sendParams = this._compileMessageCommand(cmd, path);
         compiledCommands.push(async function (session) {
           await session.send(sendParams);
@@ -82,13 +97,12 @@ export default class FlowDialog extends Dialog {
         compiledCommands.push(async function () { await sleep(cmd.seconds*1000); });
       }
     }
-
-    var handler = async (session, path, ...args) => {
+    var handler = async (session, path, args) => {
       for (let compiledCommand of compiledCommands) {
-        await compiledCommand(session, path, ...args);
+        console.log('executing command:', compiledCommand);
+        await compiledCommand(session, path, args);
       }
     };
-
     return this._addFlowHandler(path, handler);
   }
 
@@ -114,11 +128,11 @@ export default class FlowDialog extends Dialog {
       var items = this._compileMessageItems(command.items, path);
     }
     // this is an acceptable argument to Session.send
-    return {
+    return deleteUndefinedKeys({
       ...command,
       actions,
       items,
-      flows:undefined};
+      flows:undefined});
   }
 
   /**
@@ -137,9 +151,12 @@ export default class FlowDialog extends Dialog {
       let itemActions;
       if (item.actions) {
         itemActions = this._compileMessageActions(item.actions, [...path, item.id]);
+        sendItems.push({...item, actions: itemActions});
+      } else {
+        sendItems.push(item);
       }
-      sendItems.push({...item, actions:itemActions});
     }
+    log.silly('_compileMessageItems(%j, %j)=>', items, path, sendItems);
     return sendItems;
   }
 
@@ -184,13 +201,15 @@ export default class FlowDialog extends Dialog {
           throw new Error(`Invalid action: exec and then may only be used with `+
             `postback and reply type actions, but received: ${JSON.stringify(action)}`);
       }
-      sendParamActions.push({
-        ...actions,
-        then:undefined,
-        thenPath:undefined,
-        exec:undefined
-      });
+
+      // convert flow dialog params to DD api sendMessage params:
+      var params = {...actions};
+      delete params.then;
+      delete params.thenPath;
+      delete params.exec;
+      sendParamActions.push(params);
     }
+    log.silly('_compileMessageActions(%j, %j)=>', actions, path, sendParamActions);
     return sendParamActions;
   }
 }
@@ -221,12 +240,16 @@ function flowId(path) {
 //
 
 export function normalizeFlow(flow) {
-  log.silly('normalizeFlow(%j)', flow);
-  if (isString(flow)) {
+  if (isFunction(flow)) {
+    return [flow];
+  } else if (isString(flow)) {
+    log.silly('normalizeFlow(string: %j)', flow);
     return [{type:'text', text:flow}];
   } else if (isArray(flow)) {
+    log.silly('normalizeFlow(array: ',flow,')');
     return flow.map(normalizeFlowCommand);
   } else if (isObject(flow)) {
+    log.silly('normalizeFlow(object: %j)', flow);
     return [normalizeFlowCommand(flow)];
   } else {
     throw new Error(`Invalid flow. Expecting string, Object or Array, but received: ${JSON.stringify(flow)}`);
@@ -234,23 +257,25 @@ export function normalizeFlow(flow) {
 }
 
 export function normalizeFlowCommand(command) {
-  log.silly('normalizeFlowCommand(%j)',command);
-  if (isString(command)) {
+  log.silly('normalizeFlowCommand(',command,')');
+  if (isFunction(command)) {
+    return command;
+  } else if (isString(command)) {
     return {type:'text', text:command};
   } else {
-    var type = inferCommandType(command);
-    if (!type) {
+    var type = command.type || inferCommandType(command);
+    if (!isCommandType(type)) {
       throw new Error(`Command type must be text, image, list or carousel.  Cannot infer from ${JSON.stringify(command)}`);
     }
-    var actions = command.actions ? normalizeActions(actions, 'reply') : undefined;
+    var actions = command.actions ? normalizeActions(command.actions, 'reply') : undefined;
     var items = command.items ? normalizeItems(items) : undefined;
     var flows = command.flows ? normalizeFlows(flows) : undefined;
-    return {type, ...command, actions, items, flows};
+    return deleteUndefinedKeys({type, ...command, actions, items, flows});
   }
 }
 
 export function normalizeFlows(flows) {
-  log.silly('normalizeFlows(%j)',flows);
+  log.silly('normalizeFlows(',flows,')');
   if (isObject(flows)) {
     var normFlows = {};
     for (var id in flows) {
@@ -270,27 +295,45 @@ export function normalizeFlows(flows) {
  * @return {Array} An object conforming to the action specification of the Session.send api
  */
 export function normalizeActions(actions, defaultType) {
-  log.silly('normalizeActions(%j,%j)', actions, defaultType);
+  log.silly('normalizeActions(',actions,',',defaultType,')');
   if (isArray(actions)) {
-    return actions;
+    return actions.map(action=>normalizeAction(action.id, action, defaultType));
   } else if (isObject(actions)) {
     var normalizedActions = [];
     for (let k in actions) {
-      var action = actions[k];
-      var type = action.type || inferActionType(action, defaultType);
+      var action = normalizeAction(k, actions[k], defaultType);
+      var type = action.type;
       if (!type) {
         throw new Error(`Action type must be one of buy, link, postback, `+
           `reply, share or locationRequest. Unable to infer type of object: ${action}`);
       }
-      normalizedActions.push({
-        id: k,
-        text: type!='share' ? action.text || k : undefined,
-        type,
-        ...action
-      });
+      normalizedActions.push(action);
     }
+    return normalizedActions;
   } else {
     throw new Error(`Expecting an Array or Object describing actions, but received: ${JSON.stringify(actions)}`);
+  }
+}
+
+export function normalizeAction(id, action, defaultType) {
+  log.silly('normalizeAction(',id,',',action,',',defaultType,')');
+  if (isAction(action)) {
+    var type = action.type || inferActionType(action, defaultType);
+    return deleteUndefinedKeys({
+      ...action,
+      id: action.id || id,
+      text: type=='share' ? undefined :  action.text || id,
+      type
+    });
+  } else if (isFlow(action)) {
+    return {
+      id: id,
+      type: defaultType,
+      text: id,
+      then: normalizeFlow(action)
+    };
+  } else {
+    throw new Error(`Unable to normalize action ${JSON.stringify(action)} for id:${id}`);
   }
 }
 
@@ -313,30 +356,62 @@ export function normalizeItems(items) {
   }
 }
 
-function isMessageType(type) {
+export function isFlow(obj) {
+  return isArray(obj) || isFunction(obj) || isFlowCommand(obj);
+}
+
+export function isFlowCommand(obj) {
+  return isString(obj) || isFunction(obj) || (
+    isObject(obj) && isCommandType(obj.type || inferCommandType(obj))
+  );
+}
+
+export function isAction(obj) {
+  return !!(isObject(obj) && isActionType(obj.type || inferActionType(obj,'reply')));
+}
+
+export function isActionable(obj) {
+  return isFlow(obj) || isAction(obj);
+}
+
+export function isActionType(type) {
+  return ['reply','postback','link','share','buy','locationRequest'].includes(type);
+}
+
+export function isMessageType(type) {
   return ['text','image','list','carousel'].includes(type);
 }
 
-function inferActionType(action, defaultType) {
+export function isCommandType(type) {
+  return type=='wait' || isMessageType(type);
+}
+
+export function inferActionType(action, defaultType) {
   if (action.uri) {
     return 'link';
   } else if (action.amount) {
     return 'buy';
-  } else if (action.then || action.exec) {
+  } else if (action.then || action.exec || action.thenGo) {
     return defaultType;
   }
 }
 
-function inferCommandType(command) {
-  if (command.type) {
-    return command.type;
-  } else if (command.mediaUrl) {
+export function inferCommandType(command) {
+  if (command.mediaUrl) {
     return 'image';
   } else if (command.text) {
     return 'text';
   }
 }
 
+export function deleteUndefinedKeys(o) {
+  for (let k in o) {
+    if (o[k]===undefined) {
+      delete o[k];
+    }
+  }
+  return o;
+}
 //
 // actions: {
 //   choice1: {
@@ -367,28 +442,3 @@ function inferCommandType(command) {
 //   }
 // }
 //
-// 'items'
-// // FLOW::item[a].buy
-// items: [ // payload = ...path.item[a]
-//   {
-//     id: "a",
-//     text: "a",
-//     title:..., description:...,mediaUrl:...,mediaType,...,
-//     actions: [{
-//
-//     }]
-//   },
-//   b: {
-//
-//   }
-// }
-//
-
-//
-// function pathToArray(path) {
-//   if (isArray(path)) {
-//     return path;
-//   } else {
-//     return path.split("|");
-//   }
-// }
