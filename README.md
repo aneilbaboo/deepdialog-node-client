@@ -2,11 +2,78 @@
 
 Bot building superpowers.
 
+```javascript
+
+// dialogs/astrologer.js
+import {FlowDialog, setVar} from 'deepdialog';
+
+export const Astrologer = new FlowDialog({
+  name: "Astrologer",
+  flows: {
+    start: [
+      "Hi, I'm Sybil the Astrologer...",
+      { type:'wait', seconds:2 }, // a pregnant pause
+      {
+        start: "Sys:YesNoPrompt",
+        args: {text: "I can read your horoscope. Would you like that?" },
+        then: {
+          if: ({result})=>result,
+          then: {
+            text: "Would you like to subscribe for daily readings?",
+            actions: {
+              yes: [
+                setVar('Subscribed', true), //
+                "You are now subscribed for daily readings"
+              ],
+              no: [
+                setVar('Subscribed', false),
+                "Ok, I won't subscribe you to daily readings"
+              ]
+            }
+          },
+          else: "I'm sorry, I'm just a simple bot.  This is all I'm capable of."
+        }
+      }
+    ]
+  }
+});
+
+// dialogs/readhoroscope.js
+export {FlowDialog} from 'deepdialog';
+
+export const ReadHoroscope = new FlowDialog({
+  name: 'ReadHoroscope',
+  flows: {
+    start: {
+      if: ({ZodiacSign})=>!ZodiacSign,
+      then: async ({ZodiacSign}) => {
+        var horoscope = await retrieveHoroscope(ZodiacSign),
+        session.send(horoscope);
+      },
+      else: {
+        start: "PickSign",
+        then: {
+          if: {result}=>result,
+          then: async ({result}) => await session.save({ZodiacSign: result});
+        }
+      }
+    }
+  }
+});
+
+// dialogs/picksign.js
+// A dialog which enables the user to choose their Zodiac sign
+// ...
+```
+
 ### Get started
 
 Step by step instructions - or checkout the starter bot:
 
 #### 1. Write Dialogs
+
+Checkout the [Flow Language](docs/flowlanguage.md) for a high-level approach
+to writing dynamic conversations.
 
 ```javascript
 // maindialog.js
@@ -31,12 +98,31 @@ MainDialog.onText(/hello.*/, async function (session, text) {
 
 #### 2. Create the App
 
+And add the dialogs:
+
+```javascript
+import {MainDialog} from './maindialog';
+
+var app = new App({
+  appId: process.env.DEEPDIALOG_APPID,
+  appSecret: process.env.DEEPDIALOG_APPSECRET,
+  hostURL: process.env.HOST_URL,
+  mainDialog: 'MainDialog', // point at the starting dialog
+  deepDialogServer: process.env.DEEPDIALOG_SERVER_URL,
+  automaticTypingState: true
+});
+
+app.addDialogs(MainDialog);
+```
+
+#### 3. Start the App Server and save the state
 ```javascript
 
+app.server.start(process.env.PORT, async function () {
+  log.info('Bot started');
+  await app.save();
+});
 ```
-#### 3. Start the App Server
-
-#### 4. Synchronize your App with DeepDialog
 
 ## How it works
 

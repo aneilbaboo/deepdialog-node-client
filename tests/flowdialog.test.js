@@ -190,6 +190,7 @@ describe.only('FlowDialog normalization', function () {
         type:'share'
       });
     });
+
   });
 
   context('normalizeActions', function () {
@@ -367,11 +368,11 @@ describe.only('FlowDialog', function () {
       var handler;
       beforeEach(async function () {
         events = [];
-        fakeSession = { send(params,path,args) { events.push([params,path,args]); }};
+        fakeSession = { send(params) { events.push(params); }};
         dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
         handler = dialog._compileFlow(
           [
-            "Greetings",
+            "Greetings!",
             {
               type:'text',
               text:'Is this what you want?',
@@ -388,8 +389,9 @@ describe.only('FlowDialog', function () {
                 ],
                 no: "Oh, that's too bad!",
                 askAgain: {
-                  async postback(session, path, ...args) {
-                    session.push("askAgainPostback", path, args);
+                  text: 'ask again',
+                  async exec(session, path, ...args) {
+                    session.push("askAgain", path, args);
                   }
                 }
               }
@@ -401,7 +403,7 @@ describe.only('FlowDialog', function () {
 
       });
 
-      it('the handler should run the top level commands', function () {
+      it.only('the handler should run the top level commands', function () {
         expect(events).to.deep.equal([
           { type: 'text', text: 'Greetings!' },
           {
@@ -409,14 +411,22 @@ describe.only('FlowDialog', function () {
             text: 'Is this what you want?',
             actions: [
               {
+                id: 'yes',
                 type: 'reply',
                 text: 'yes',
                 payload: 'FLOWID:start|yes'
               },
               {
+                id: 'no',
                 type: 'reply',
                 text: 'no',
                 payload: 'FLOWID:start|no'
+              },
+              {
+                id: 'askAgain',
+                type: 'reply',
+                text: 'ask again',
+                payload: 'FLOWID:start|askAgain'
               }
             ]
           }
