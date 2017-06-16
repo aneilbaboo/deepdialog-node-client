@@ -237,8 +237,8 @@ export default class App {
     if (resultHandler) {
       await Promise.resolve(resultHandler(session, completedFrame.result, notification));
     } else {
-      log.error("Couldn't find result handler for %s in dialog %s in result handlers: %j",
-        completedDialogRef, session.dialogName, Object.keys(session.dialog.resultHandlers));
+      log.error("Couldn't find result handler for %s|%s in dialog %s in result handlers: %j",
+        completedDialogRef, completedFrame.tag, session.dialogName, Object.keys(session.dialog.resultHandlers));
     }
   }
 

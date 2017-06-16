@@ -207,9 +207,11 @@ export default class Dialog {
     var result = this.resultHandlers[resultHandlerKey(dialog, tag)];
     if (result) {
       return result;
-    } else if (!tag || tag=='') {
+    } else if (!tag || tag=='' || tag==anyPattern) {
       // try default handler
       return this.resultHandlers[resultHandlerKey(dialog)];
+    } else {
+      return this.resultHandlers[resultHandlerKey(anyPattern, tag)];
     }
   }
 
