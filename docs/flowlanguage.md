@@ -251,7 +251,7 @@ Generate them on the fly:
 ```javascript
 {
   text: "What kind of ice cream do you want?",
-  actions: async (vars, session, path) { // ignore vars and session
+  async actions (vars, session, path) { // ignore vars and session
     var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
     return iceCreamTypes.map(type=>({
       id: type,
@@ -262,7 +262,8 @@ Generate them on the fly:
     }));
   },
   flows: {
-    orderComplete: ({value})=>`Hope you enjoyed the ${value}!`
+    orderComplete: "Hope you enjoyed the {{value}}!"
+    }
   }
 }
 ```
@@ -312,7 +313,7 @@ Set session variables
 
 // alternatively, use a handler:
 {
-  set: async ({userId})=>await db.getUserAddress(userId);
+  set: async ({userId})=>await db.getUserAddress(userId)
 }
 ```
 
@@ -324,18 +325,20 @@ Starts a new dialog
 {
   type: 'start',
   start: "PromptDialog",
-  args: {text: 'Enter your name'}
-  then: ({value}) => `Your name is ${value}` // value returned by PromptDialog
+  args: {text: 'Enter your name'},
+  async then(vars, session) { // value returned by PromptDialog
+    await session.send(`Your name is ${vars.value}`);  
+  }
 }
 
-// equivalent to this abbreviation:
+// is equivalent to this abbreviation:
 { start: ["PromptDialog", {text:"Enter your name"}],
-  then: "Your name is {:value}" } // using interpolation
+  then: "Your name is {{value}}" } // using interpolation
 ```
 
 ###### The value variable
 
-When a dialog finishes, the value it returns can be accessed in as `value` in the `then` handler's vars parameter, as shown above.
+When a dialog finishes, the value it returns can be accessed as `value` in the `then` handler's vars parameter, as shown above.
 
 ##### Finish command
 
@@ -344,19 +347,21 @@ Ends the current dialog, returning control to the calling dialog.
 ```javascript
 {
   type: 'finish',
-  finish: ({username})=>username // this dialog returns the username
+  finish: ({username})=>username; // this dialog returns the username
 }
 // equivalent to:
-{ finish: ({username})=>username}
+{ finish({username}) { return username; } }
 ```
 
 #### String interpolation
 
 Not yet implemented.  The system will interpolate values into strings so you can write:
 ```javascript
-then: "So your favorite color is {:value}"
+then: "So your favorite color is {{value}}"
 ```
 as a shortcut for:
 ```javascript
-then: async (vars, session)=> await session.send(`So your favorite color is ${vars.value}`)
+async then(vars, session) {
+  await session.send(`So your favorite color is ${vars.value}`);
+}
 ```

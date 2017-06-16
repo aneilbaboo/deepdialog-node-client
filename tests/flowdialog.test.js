@@ -65,10 +65,9 @@ describe('FlowDialog definitions', function () {
     it('should be "link" if uri key is present', function () {
       expect(inferActionType({uri:'http://...'})).to.be.ok;
     });
-    it('should infer the default type when then, exec or thenGo is provided', function () {
-      expect(inferActionType({exec:()=>{}}, 'reply')).to.equal('reply');
+    it('should infer the default type when then or thenFlow is provided', function () {
       expect(inferActionType({then:[]}, 'postback')).to.equal('postback');
-      expect(inferActionType({thenGo:"a.b.c"}, 'postback')).to.equal('postback');
+      expect(inferActionType({thenFlow:"a.b.c"}, 'postback')).to.equal('postback');
     });
   });
 
@@ -113,9 +112,8 @@ describe('FlowDialog definitions', function () {
       expect(isAction({uri:'http://...'})).to.be.ok;
     });
     it('should be true for objects with the default infered action type', function () {
-      expect(isAction({"exec":"somefn"})).to.be.ok;
       expect(isAction({then:['a message']})).to.be.ok;
-      expect(isAction({thenGo:'somepath'})).to.be.ok;
+      expect(isAction({thenFlow:'somepath'})).to.be.ok;
     });
   });
 
@@ -128,13 +126,13 @@ describe('FlowDialog definitions', function () {
       expect(isActionable({type:'postback'})).to.be.ok;
     });
     it('should be true for inferred actions', function () {
-      expect(isActionable({exec:()=>{}})).to.be.ok;
       expect(isActionable({amount:100})).to.be.ok;
+      expect(isActionable({then:"hi"})).to.be.ok;
     });
   });
 });
 
-describe.only('FlowDialog normalization', function () {
+describe('FlowDialog normalization', function () {
   context('normalizeAction', function () {
     it('should convert a flow into an action object where text is the id and defaultType is the action type', function () {
       expect(normalizeAction('the-id','this is a message', 'reply')).to.deep.equal({
@@ -235,14 +233,6 @@ describe.only('FlowDialog normalization', function () {
     });
 
     context('should infer the defaultType', function () {
-      it('when exec is provided ', function () {
-        expect(normalizeActions({
-          yes: { exec: "SomeFunction" },
-        }, 'reply')).to.deep.equal([
-          { id:'yes', text:'yes', type:'reply', exec:"SomeFunction" }
-        ]);
-      });
-
       it('when then is provided', function () {
         expect(normalizeActions({
           yes: { then: ["another","flow"] },
@@ -263,15 +253,15 @@ describe.only('FlowDialog normalization', function () {
         ]);
       });
 
-      it('when thenGo is provided', function () {
+      it('when thenFlow is provided', function () {
         expect(normalizeActions({
-          a: { thenGo: ["id2","id2"] },
+          a: { thenFlow: ["id2","id2"] },
         }, 'postback')).to.deep.equal([
           {
             id:'a',
             text:'a',
             type:'postback',
-            thenGo: ["id2","id2"]
+            thenFlow: ["id2","id2"]
           }
         ]);
       });
@@ -313,7 +303,7 @@ describe.only('FlowDialog normalization', function () {
   });
 });
 
-describe.only('FlowDialog', function () {
+describe('FlowDialog', function () {
   context('constructor', function () {
     it('should have an onStart handler when provided a flow named start', function () {
       var dialog = new FlowDialog({
@@ -335,7 +325,7 @@ describe.only('FlowDialog', function () {
       var path = ['start'];
       var handler = dialog._compileFlow(["say a","say b","say c"],path);
       expect(handler).to.be.a.function;
-      await handler(fakeSession);
+      await handler({}, fakeSession);
       expect(sendParams).to.deep.equal([
         {type:'text',text:'say a'},
         {type:'text',text:'say b'},
@@ -346,18 +336,15 @@ describe.only('FlowDialog', function () {
     it('should return a handler which takes a session as argument', async function() {
       var events = [];
       var fakeSession = {
-        push(path, args) { events.push({path, args}); }
+        push(path, vars) { events.push({path, vars}); }
       };
       var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-      var path = ['start'];
-      console.log("_compileFlow called");
       var handler = dialog._compileFlow(
-        (session, path, args)=> {session.push(path, args);}
-      , path);
-      await handler(fakeSession, ['start']);
-      console.log("events:",events);
+        (vars, session, path)=> {session.push(path, vars);}
+      , ['compiledPath']);
+      await handler({a:1}, fakeSession, ['providedPath']);
       expect(events).to.deep.equal([
-        {path:['start'], args:undefined}
+        {path:['compiledPath'], vars:{a:1}}
       ]);
     });
 
@@ -382,28 +369,36 @@ describe.only('FlowDialog', function () {
                   {
                     text:"Would you like anything else?",
                     actions: {
-                      yes: "Awesome!",
-                      no: "Oh poo"
+                      yes: ["Awesome!", {finish:"want something else"}],
+                      no: ["Oh poo", {finish:"doesn't want something else"}]
                     }
                   }
                 ],
-                no: "Oh, that's too bad!",
+                no: ["Oh, that's too bad!", {finish:"not what I want"}],
                 askAgain: {
                   text: 'ask again',
-                  async exec(session, path, ...args) {
-                    session.push("askAgain", path, args);
-                  }
+                  then: [
+                    (vars, session, path) => {
+                      session.push("askAgain", path, vars);
+                    },
+                    {
+                      start:"FirstChildDialog",
+                      then: {
+                        start:({value})=>["SecondChildDialog",{value}]
+
+                      }
+                    }
+                  ]
                 }
               }
             }
           ],
           ['start']
         );
-        await handler(fakeSession);
-
+        await handler({}, fakeSession);
       });
 
-      it.only('the handler should run the top level commands', function () {
+      it('the handler should run the top level commands', function () {
         expect(events).to.deep.equal([
           { type: 'text', text: 'Greetings!' },
           {
@@ -411,32 +406,29 @@ describe.only('FlowDialog', function () {
             text: 'Is this what you want?',
             actions: [
               {
-                id: 'yes',
                 type: 'reply',
                 text: 'yes',
-                payload: 'FLOWID:start|yes'
+                payload: 'TestFlowDialog:start.yes'
               },
               {
-                id: 'no',
                 type: 'reply',
                 text: 'no',
-                payload: 'FLOWID:start|no'
+                payload: 'TestFlowDialog:start.no'
               },
               {
-                id: 'askAgain',
                 type: 'reply',
                 text: 'ask again',
-                payload: 'FLOWID:start|askAgain'
+                payload: 'TestFlowDialog:start.askAgain'
               }
             ]
           }
         ]);
       });
 
-      it('the dialog should have postback and payload handlers', function (){
+      it('the dialog should have the expected postback and payload handlers', function (){
         expect(dialog.inputHandlers).to.deep.equal([
-          {payload:'FLOWID:start|no'},
-          {payload:'FLOWID:start|yes'}
+          {payload:'TestFlowDialog:start|no'},
+          {payload:'TestFlowDialog:start|yes'}
         ]);
       });
     });
