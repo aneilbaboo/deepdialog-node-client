@@ -4,7 +4,7 @@
 
 DeepDialog flows enable developers to script interactions using an intuitive hierarchical data format.  Flows make it easier to use the primitives of the DeepDialog backend.  Starting dialogs, capturing results, programming action buttons, and using branching logic can be done with a fraction of the effort, and in a compact readable style.
 
-### FlowDialog
+## FlowDialog
 
 To get started, you need to create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog starts.
 
@@ -24,17 +24,17 @@ export const HelloWorld = new FlowDialog({
 });
 ```
 
-### Flows and Commands
+## Flows
 
-Flows let you to write a sequential set of steps for the bot to execute, including branching logic, responding to button clicks, and starting other dialogs and collecting results from them.
+Flows let you to write a sequences of operations for the bot to execute.  It is a powerful language which permits branching logic, responding to different button clicks, starting other dialogs and collecting results from them.
 
-The compiler learns about top level flows by looking at the `flows` argument provided to the FlowDialog constructor.  It discovers new flows as it parses these flows, and generates names for them.  See the section below about Flow Paths.
+Top level flows are defined in the `flows` argument provided to the FlowDialog constructor.  It discovers new flows as it parses these flows, and generates names for them.  See the section below about Flow Paths.
 
-#### The onStart flow is special
+### The onStart flow
 
-There is a special flow named onStart which is initiated automatically when a dialog is started.  You can add other flows in there too, if you need. Most of the time, you'll just have an onStart flow.
+When a FlowDialog starts, it automatically runs the special onStart flow. Arguments provided to the dialog are also available in the first argument of handler functions, which are discussed below. The flows parameter also accepts other flows.  See the Advanced section for more information on how to use these.  
 
-#### Commands
+## Commands
 
 Commands are objects which have a type key.  For example, here is a command which sends a simple text message to the user:
 
@@ -45,7 +45,7 @@ Commands are objects which have a type key.  For example, here is a command whic
 }
 ```
 
-##### Abbreviation
+### Abbreviation
 
 To improve readability, the developer can write abbreviated forms of some commands.  During compilation, the type of an abbreviation is inferred and it's substituted with a normalized form.  
 
@@ -59,20 +59,22 @@ For example, strings are interpreted as simple text message commands. The follow
 
 In addition, anywhere a flow is expected, it is permissible to supply a single command or an abbreviation of a command.
 
-For example, the start flow above could have been written:
+For example, the onStart flow in the HelloWorld dialog could have been written:
 
 ```javascript
-export const MyDialog = new FlowDialog({
-  name: "MyDialog",
+import {FlowDialog} from 'deepdialog';
+
+export const HelloWorld = new FlowDialog({
+  name: "HelloWorld",
   flows: {
-    onStart: "Hello, sailor!"
+    onStart: "Hello, human!"
   }
 });
 ```
 
-### Handlers
+## Handlers
 
-Many elements in a flow tree can be substituted with a function called a handler. Handlers enable a developer to dynamically generate messages, action buttons, and branch to other dialogs dynamically.  
+Many elements in a flow tree can be substituted with a function called a handler. Handlers enable a developer to dynamically generate messages, action buttons, branch to other dialogs dynamically, or run arbitrary code.  Handlers make it easy to write highly dynamic, responsive conversational flows.
 
 Handlers always have the form:
 ```javascript
@@ -80,28 +82,36 @@ Handlers always have the form:
 ```
 Where,
 `vars` - an Object containing the variables associated with the session.
-  `then` flow of a start command, the special `value` key will be set to the
-  value returned by the dialog started by the command.
+  A special `value` key is available in the `then` flow of a start command, representing the result returned by that dialog.
 `session` - the session object if you need low-level access to it
 `path` - an array containing the ids identifying the current element.  This
   can be useful if a programmer needs to compute the path of a flow relative
   to the current element, for example, when generating message items or actions.
 
-#### Usage of Handlers
+See the Advanced Usage section below for more on handlers.
 
-* Command handlers - a handler which appears in a flow executes arbitrary code.
-  The value is ignored.
-* Value handlers - handlers which dynamically compute values usually don't produce side effects and must return an appropriately structured Object. For example, the `actions` and `items` presented in messages may be generated at runtime by substituting a handler which returns part of the  tree.
+## String interpolation
 
-   If dynamically computed action Objects need to trigger *not* contain `then` flows, since flows must be compiled at runtime. If a developer wishes to trigger a flow from a dynamically generated action.
+Not yet implemented.  The system will interpolate values into strings so you can write:
+```javascript
+then: "So your favorite color is {{value}}"
+```
+as a shortcut for:
+```javascript
+async then(vars, session) {
+  await session.send(`So your favorite color is ${vars.value}`);
+}
+```
 
-#### Command types
+## Command Types
 
-##### Message commands
+### Message commands
 
 The flow language supports the same types available in Session.send():
 
-* text - sends a text message. May include actions.
+### text Command
+
+Sends a text message and optional action buttons.
 ```javascript
 {
   type: 'text',
@@ -113,7 +123,10 @@ The flow language supports the same types available in Session.send():
 }
 ```
 
-* image - sends an image with an optional caption. May include actions.
+### image Command
+
+Sends an image with an optional caption and/or buttons buttons.
+
 ```javascript
 {
   type: 'text',
@@ -127,8 +140,10 @@ The flow language supports the same types available in Session.send():
 }
 ```
 
-* list - sends a vertical list.  Must include items. May include actions.
-* carousel - sends a horizontal carousel.  Must include items. May include actions.
+### list and carousel Commands
+
+Sends a vertical scrolling list or horizontally scrolling carousel.  Must include items. May include actions.  These two items have identical structure except for the type keyword.  The type of these commands cannot be inferred.  
+
 ```javascript
 {
   type: 'list', // or carousel
@@ -158,12 +173,30 @@ The flow language supports the same types available in Session.send():
 }
 ```
 
-###### Item Objects
+#### Item Objects
 
-Items represent elements in a list or carousel type message.  They have the following structure:
+Items represent elements in a list or carousel type message.  Items are provided as arrays or lists:
+```javascript
+{ ...
+  items: {
+    a: { ... }, // item a
+    b: { ... }, // item b
+  }
+}
+// is equivalent to
+{ ...
+  items: [
+    { id: a, ... },
+    { id: b, ... }
+  ]
+}
+```
+
+Each item has the following structure:
 
 ```javascript
 {
+  id: "item1", // required for items in an array; default is key in Object format
   title: 'the title (40 chars)', //
   description: 'the description (80 chars)',
   mediaUrl: 'https://domain.com/image.png',
@@ -177,7 +210,9 @@ Items represent elements in a list or carousel type message.  They have the foll
 ```
 The items key can be generated dynamically using a handler.
 
-###### Action Objects
+#### Action Objects
+
+Like items, the actions can be provided as an Array or Object.
 
 There are several types of action buttons:
 
@@ -222,55 +257,13 @@ There are several types of action buttons:
 }
 ```
 
-###### Inference of Reply and Postback Buttons
+#### Inference of Reply and Postback Buttons
 
 Actions in 'text' and 'image' messages are assumed to be type 'reply', if another type cannot be inferred.
 
 Actions in carousel and list items are assumed to be of type 'postback', if another type cannot be inferred.
 
-###### Dynamic Actions and Items
-
-It is often necessary to generate actions and items at runtime.  For example, retrieving a number of items from a changing inventory based on a user's preferences.  This can be done by supplying a handler function instead of a list or object.
-
-I.e., instead of sending a message with a set of hard-coded actions,
-```javascript
-{
-  text: "What kind of ice cream do you want?"
-  actions: {
-    chocolate: { start: ["OrderIceCream", {type:"chocolate"},
-                 then: "Hope you enjoy the chocolate!" },
-    vanilla:   { start: ["OrderIceCream", {type:"vanilla"},
-                 then: "Hope you enjoy the vanilla!" },
-    strawberry:{ start: ["OrderIceCream", {type:"strawberry"},
-                 then: "Hope you enjoy the strawberry!" }
-  }
-}
-```
-
-Generate them on the fly:
-```javascript
-{
-  text: "What kind of ice cream do you want?",
-  async actions (vars, session, path) { // ignore vars and session
-    var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
-    return iceCreamTypes.map(type=>({
-      id: type,
-      text: type,
-      start: ["OrderIceCream", {type:type}],
-      value: type,
-      thenFlow: [...path, 'orderComplete']
-    }));
-  },
-  flows: {
-    orderComplete: "Hope you enjoyed the {{value}}!"
-    }
-  }
-}
-```
-
-Notice how we replaced `then` with `thenFlow`.  This is necessary because all flows must be named and known to the compiler at runtime.  It also has the benefit of allowing us to reuse an existing flow.  The `thenFlow` key takes a path to a particular flow.  
-
-##### Wait command
+### Wait command
 
 Pauses the bot for a specified number of seconds
 
@@ -280,23 +273,24 @@ Pauses the bot for a specified number of seconds
 { seconds: 5}
 ```
 
-##### Conditional command
+### Conditional command
 
 Run flow conditionally: if/then/else logic
 
 ```javascript
 {
+  id: 'firstIfBlock', // optional - defaults to 'if' if not provided
   type: 'conditional',  // optional - type is inferred from if/then
   if: myPredicate,  // handler function which returns boolean
   then: ["Wow!", "It is true"], // flow if truthy
   else: "It is false :(" // flow if falsey
 }
 
-// same as:
+// same as (except for id):
 { if: myPredicate, then: ["Wow!", "It is true"], else: "It is false :(" }
 ```
 
-##### Set command
+### Set command
 
 Set session variables
 
@@ -312,21 +306,22 @@ Set session variables
 }
 
 // alternatively, use a handler:
-{
-  set: async ({userId})=>await db.getUserAddress(userId)
+{ // assuming this db method returns a JS Object:
+  async set({userId}) {return await db.getUserAddress(userId); }
 }
 ```
 
-##### Start command
+### Start command
 
-Starts a new dialog
+Starts a new dialog.
 
 ```javascript
 {
+  id: 'myId', // defaults to start(MyDialog) or start() if not provided
   type: 'start',
   start: "PromptDialog",
   args: {text: 'Enter your name'},
-  async then(vars, session) { // value returned by PromptDialog
+  async then(vars, session) { // vars.value returned by PromptDialog
     await session.send(`Your name is ${vars.value}`);  
   }
 }
@@ -336,32 +331,222 @@ Starts a new dialog
   then: "Your name is {{value}}" } // using interpolation
 ```
 
-###### The value variable
+#### Start handler
 
-When a dialog finishes, the value it returns can be accessed as `value` in the `then` handler's vars parameter, as shown above.
+The start parameter has three forms:
 
-##### Finish command
+```javascript
+ // 1. start MyDialog with no args
+{ start: "MyDialog" }
+// 2. pass args to dialog
+{ start: ["MyDialog", {arg1:1, arg2:2}] }
+// 3. use a handler to generate the params
+//    (more in the advanced section)
+{ start: ()=>["MyDialog", {arg1:, arg2:2}]}
+```
+
+#### Getting the returned value
+
+When the dialog finishes, the `then` flow will execute and the vars parameter will contain a special key `value` that holds the result.  This is the same value that was passed to session.finish() or the finish command (see following).
+
+The value can be accessed via handlers or string interpolation.
+
+```javascript
+{ start: "MyDialog",
+  then: [
+    // use a handler
+    ({value})=> {
+    // do something with the value returned by MyDialog
+    },
+    // save the result into a variable
+    { set: {
+        X: ({value})=>value
+      }
+    },
+    // use the result in a message:
+    "MyDialog returned {{value}}"
+  ]
+}
+```
+
+### finish Command
 
 Ends the current dialog, returning control to the calling dialog.
+```javascript
+{ type:'finish', finish: true}
+// equivalent to
+{ finish: true}
+```
+
+The finish argument can be a handler:
 
 ```javascript
 {
   type: 'finish',
   finish: ({username})=>username; // this dialog returns the username
 }
-// equivalent to:
+// or
 { finish({username}) { return username; } }
 ```
 
-#### String interpolation
+### while Command
 
-Not yet implemented.  The system will interpolate values into strings so you can write:
+Coming soon.
+
+Continues executing the then flow while the value returned by the while handler is truthy.
+
 ```javascript
-then: "So your favorite color is {{value}}"
+{ id: 'firstWhile', // required if >1 iteration exists in a then block -
+                    // defaults to 'while'
+  while: ({condition})=>condition,
+  then: [ ... ] }
 ```
-as a shortcut for:
+
+### forEach Command
+
+Coming soon.
+
+Iterates over a list.  On each iteration, the special variable `value` is bound to each subsequent element of the list.
+
 ```javascript
-async then(vars, session) {
-  await session.send(`So your favorite color is ${vars.value}`);
+{ forEach: [4,3,2,1],
+  then: "{{value}}..." }
+  // sends:
+  // 4...
+  // 3...
+  // 2...
+  // 1...
+
+// alternative form takes a dynamically determined list
+{ forEach({mylist}) { return myList; },
+  then({value}, session) {
+    // do something with each list element
+  }
 }
+```
+
+## Advanced Topics
+
+### Usage of Handlers
+
+* Command handlers - a handler which appears in a flow executes arbitrary code. The value returned by the handler is ignored.
+* Value handlers - handlers which dynamically compute values usually don't produce side effects and must return an appropriately structured value. For example, the `actions` and `items` presented in messages may be generated at runtime by substituting a handler which returns part of the tree.  The start value of a start command can be replaced by a handler which returns an array containing the dialog name and initial arguments.
+
+### Example: Dynamic Message Items
+
+It is sometimes necessary to generate parts of the flow at runtime.  For example, retrieving a number of items from a changing inventory based on a user's preferences.  This can be done by supplying a handler function instead of a list or object.
+
+I.e., instead of sending a message with a set of hard-coded actions,
+```javascript
+{
+ text: "What kind of ice cream do you want?"
+ actions: {
+   chocolate: { start: ["OrderIceCream", {type:"chocolate"},
+                then: "Hope you enjoy the chocolate!" },
+   vanilla:   { start: ["OrderIceCream", {type:"vanilla"},
+                then: "Hope you enjoy the vanilla!" },
+   strawberry:{ start: ["OrderIceCream", {type:"strawberry"},
+                then: "Hope you enjoy the strawberry!" }
+ }
+}
+```
+
+Generate them on the fly:
+
+```javascript
+{
+ text: "What kind of ice cream do you want?",
+ async actions (vars, session, path) { // ignore vars and session
+   var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
+   return iceCreamTypes.map(type=>({
+     id: type,
+     text: type,
+     start: ["OrderIceCream", {type:type}],
+     value: type,
+     thenFlow: [...path, 'orderComplete']
+   }));
+ },
+ flows: {
+   orderComplete: "Hope you enjoyed the {{value}}!"
+   }
+ }
+}
+```
+
+Notice how we replaced `then` with `thenFlow`.  This is necessary because all flows must be named and known to the compiler at runtime.  It also has the benefit of allowing us to reuse an existing flow.  The `thenFlow` key takes a path to a particular flow.  
+
+
+### Ids and Flow Paths
+
+Each flow is identified by an array of `id`s called a flow path or "path" representing the set of transitions from the top level to a particular element.  The ids are inferred or written explicitly for particular commands which represent branch points or points where the dialog resumes control of the conversation.  
+
+A point in the conversation flow where the user clicked "yes" then "no" after a dialog started would be referred to as:
+```javascript
+['onStart', 'yes', 'no']
+```
+A related concept is the flowPathKey which is a string written:`"onStart.yes.no"`.
+
+### Starting other flows
+
+The FlowDialog constructor takes a flows parameter.  We've already seen the onStart flow.  
+
+### Chaining
+
+We can pass a result obtained from one dialog to another:
+
+```javascript
+{ start: "FirstDialog",
+  then: {
+    start:({value})=>["SecondDialog", value]
+    then: ...
+  }
+}
+```
+
+### Higher Order Programming
+
+In this fanciful example, a SalesDialog implements high level logic for conducting an interaction with a customer.  The SalesDialog takes several string parameters - customerConcernsDialog, productsDialog, and salesDialog - which represents dialogs which carry out the detailed logic for a particular domain, such as appliance sales.
+
+
+```javascript
+export const SalesDialog = new FlowDialog({
+  name: "SalesDialog ",
+  flows: {
+    onStart: [
+      {
+        // understand what the customer wants...
+        start: ({customerConcernsDialog})=>customerConcernsDialog,
+        then: {
+          // discuss appropriate products with the customer
+          // output of the products dialog will be a product
+          // the customer wants to buy
+          start:({value, productsDialog})=>[
+            productsDialog,
+            {customerConcerns: value}
+          ],
+          then: {
+            // allow customer to place an order
+            start:({value, placeOrderDialog})=>[
+              placeOrderDialog,
+              {product: value}
+            ],
+            "Thank you, nice doing business with you!"
+          }
+        }
+      }
+    ]
+  }
+});
+
+export const ApplianceSalesDialog = new FlowDialog({
+  name: "ApplianceSalesDialog",
+  flows: {
+    onStart: {
+      start: ['GenericSalesmanDialog', {
+        customerConcernsDialog: 'ApplianceConcernsDialog',
+        productsDialog: 'ApplianceProduct'
+      }]
+    }
+  }
+})
 ```
