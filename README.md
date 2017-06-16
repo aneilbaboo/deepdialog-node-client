@@ -2,7 +2,8 @@
 
 Bot building superpowers.
 
-Documentation:
+## Documentation
+
 * [How it Works](docs/index.md)
 * [The Flow Language](docs/flowlanguage.md)
 
