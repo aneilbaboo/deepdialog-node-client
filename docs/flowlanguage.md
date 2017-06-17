@@ -486,6 +486,10 @@ A point in the conversation flow where the user clicked "yes" then "no" after a 
 ```
 A related concept is the flowPathKey which is a string written:`"onStart.yes.no"`.
 
+#### Why set the id explicitly?
+
+Some commands - conditional and start commands - create default ids.  Why override them?  The system uses flow paths to trigger actions.  For example, when postback buttons persist in a user's message thread.  If you change the flow, the ids referenced by those buttons will not longer exist.  Explicitly naming the ids so they are invariant is a partial solution to this problem.  A future version of the system will address the issue more completely. Another work around is to use top level flows for all postback buttons.  
+
 ### Starting other flows
 
 The FlowDialog constructor takes a flows parameter.  We've already seen the onStart flow.  
