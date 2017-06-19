@@ -5,7 +5,9 @@ import FlowDialog, {
   isCommandType, isActionType, isMessageType,
   inferCommandType, inferActionType,
   normalizeFlow, normalizeAction,
-  normalizeActions, normalizeMessageCommand
+  normalizeActions, normalizeMessageCommand,
+  isValidFlowId, appendFlowPathId, flowPathFromKey,
+  flowIdToText, expandCommandParam, zipPromisesToHash
 } from '../src/flowdialog';
 
 describe('Flow Language', function () {
@@ -22,6 +24,18 @@ describe('Flow Language', function () {
       it('should be falsey if neither mediaUrl or text are present', function () {
         expect(inferCommandType({actions:[]})).to.be.falsey;
         expect(inferCommandType({items:[]})).to.be.falsey;
+      });
+      it('should be "start" if "start" key is present', function () {
+        expect(inferCommandType({start:"MyDialog"})).to.equal('start');
+      });
+      it('should be "finish" if "finish" key is present', function () {
+        expect(inferCommandType({finish:true})).to.equal('finish');
+      });
+      it('should be "wait" if "seconds" key is present', function () {
+        expect(inferCommandType({seconds:5})).to.equal("wait");
+      });
+      it('should be "conditional" if "if" key is present', function () {
+        expect(inferCommandType({if:()=>{}})).to.equal("conditional");
       });
     });
 
@@ -131,6 +145,72 @@ describe('Flow Language', function () {
       it('should be true for inferred actions', function () {
         expect(isActionable({amount:100})).to.be.ok;
         expect(isActionable({then:"hi"})).to.be.ok;
+      });
+    });
+  });
+
+  describe('Flow path and ids', function () {
+    context('isValidFlowId', function () {
+      it('should be true for simple ids of word chars and underscore', function () {
+        expect(isValidFlowId("a")).to.be.ok;
+        expect(isValidFlowId("abcd")).to.be.ok;
+        expect(isValidFlowId("_abcd")).to.be.ok;
+        expect(isValidFlowId("1")).to.be.ok;
+        expect(isValidFlowId("1234567890()!@$%^&*()_-=_+[]{}|\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
+      });
+      it('should be true for hash ids', function () {
+        expect(isValidFlowId("#a")).to.be.ok;
+        expect(isValidFlowId("#abcd")).to.be.ok;
+        expect(isValidFlowId("#_abcd")).to.be.ok;
+        expect(isValidFlowId("#1")).to.be.ok;
+        expect(isValidFlowId("#1234567890()!@$%^&*()_-=_+[]{}|\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
+      });
+      it('should be false for a single hash character', function () {
+        expect(isValidFlowId("#")).to.be.false;
+      });
+      it('should be false if hash is present after the first character', function () {
+        expect(isValidFlowId("a#a")).to.be.false;
+      });
+      it('should be false if the id contains invalid characters', function () {
+        expect(isValidFlowId("hello.there")).to.be.false;
+        expect(isValidFlowId("hello\n")).to.be.false;
+        expect(isValidFlowId("hello\r")).to.be.false;
+      });
+    });
+
+    context('appendFlowPathId', function () {
+      it('should join ids with a dot', function () {
+        expect(appendFlowPathId(['a','b','c'],'d')).to.deep.equal(['a','b','c','d']);
+        expect(appendFlowPathId([],'a')).to.deep.equal(['a']);
+      });
+      it('should throw an error if an invalid id is provided', function () {
+        expect(()=>appendFlowPathId(['a'],'.b')).to.throw();
+        expect(()=>appendFlowPathId(['a'],'b#a')).to.throw();
+      });
+      it('should reset the path when a hash id is provided', function () {
+        expect(appendFlowPathId(['a','b','c'],"#d")).to.deep.equal(['#d']);
+      });
+    });
+
+    context('flowPathFromKey', function () {
+      it('should return a flow path given a relative flow path key', function () {
+        expect(flowPathFromKey('a.b.c')).to.deep.equal(['a','b','c']);
+      });
+      it('should return a flow path given a dialog flow path key', function () {
+        expect(flowPathFromKey('MyDialog:a.b.c')).to.deep.equal(['a','b','c']);
+      });
+      it('should raise an error if arg is not a string', function () {
+        expect(()=>flowPathFromKey(['a','b'])).to.throw();
+        expect(()=>flowPathFromKey(1)).to.throw();
+      });
+    });
+
+    context('flowIdToText', function () {
+      it('should strip the leading hash', function () {
+        expect(flowIdToText('#abc')).to.equal('abc');
+      });
+      it('other strings should be returned without change', function () {
+        expect(flowIdToText('abc')).to.equal('abc');
       });
     });
   });
@@ -341,6 +421,106 @@ describe('Flow Language', function () {
     });
   });
 
+  describe('Command parameter expansion', function () {
+    context("zipPromisesToHash", function () {
+      it('should return a hash given keys and an array of promises', async function () {
+        var fn = async (val) => val;
+        expect(await zipPromisesToHash(
+          ['a','b','c'],
+          [fn(1),fn(2),fn(3)]
+        )).to.deep.equal({
+          a:1,b:2,c:3
+        });
+      });
+    });
+
+    context('expandCommandParam', function () {
+      it('should evaluate a function with vars, session and path', async function () {
+        var session ={
+          async makeValue(vars, path) {
+            return {vars,path};
+          }
+        };
+        var valueHandler = async (vars, session, path)=>await session.makeValue(vars,path);
+        var result = await expandCommandParam(
+          valueHandler,
+          {a:1},
+          session,
+          ['root','child']
+        );
+
+        expect(result).to.deep.equal(
+          {vars: {a:1}, path:['root','child']}
+        );
+      });
+
+      it('should return non-object, non-array, non-string, non-function params as is', async function () {
+        expect(await expandCommandParam(123, {a:1}, "session", ['root'])).to.equal(123);
+        expect(await expandCommandParam(null, {a:1}, "session", ['root'])).to.equal(null);
+        expect(await expandCommandParam(undefined, {a:1}, "session", ['root'])).to.equal(undefined);
+      });
+
+      it('should return a rendered string, given a mustache template', async function () {
+        expect(await expandCommandParam(
+          "{{a}} {{b.c.d}}",
+          {a:"hello", b:{c:{d:"there"}}},
+          "session",
+          ['root','child']
+        )).to.equal("hello there");
+      });
+
+      it('should expand items in a list', async function () {
+        var session ={
+          async makeValue(vars, path) {
+            return {vars,path};
+          }
+        };
+
+        expect(await expandCommandParam(
+          [ null,
+            "{{a}} {{b.c.d}}",
+            async (vars, session, path)=>session.makeValue(vars,path),
+            {template:"{{a}}"}
+          ],
+          {a:"hello", b:{c:{d:"there"}}},
+          session,
+          ['root'])
+        ).to.deep.equal([
+          null,
+          "hello there",
+          {vars:{a:"hello", b:{c:{d:"there"}}}, path:['root']},
+          {template:"hello"}
+        ]);
+      });
+    });
+
+    it('should expand an Object recursively', async function () {
+      var session ={
+        async makeValue(vars, path) {
+          return {vars,path};
+        }
+      };
+
+      expect(await expandCommandParam(
+        { k1: "{{a}} {{b.c.d}}",
+          k2: {
+            k3: async (vars, session, path)=>session.makeValue(vars,path),
+            k4: [{template:"{{a}}"},  "{{b.c.d}}"]
+          }
+        },
+        {a:"hello", b:{c:{d:"there"}}},
+        session,
+        ['root'])
+      ).to.deep.equal({
+        k1:"hello there",
+        k2: {
+          k3:{vars:{a:"hello", b:{c:{d:"there"}}}, path:['root']},
+          k4: [{template:"hello"}, "there"]
+        }
+      });
+    });
+  });
+
   describe('FlowDialog', function () {
     context('constructor', function () {
       it('should have an onStart handler when provided a flow named start', function () {
@@ -354,6 +534,21 @@ describe('Flow Language', function () {
         expect(dialog.startHandler).is.ok;
       });
     });
+
+    // context('_compileMessageItems', function () {
+    //   it('should correctly compile items in a message', function () {
+    //     var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+    //     var compiledItems = dialog._compileMessageItems(normalizeItems({
+    //       type:'list',
+    //       items: {
+    //         a: {
+    //           title: "hello",
+    //           description: ""
+    //         }
+    //       }
+    //     }));
+    //   });
+    // });
 
     context('_compileFlow', function() {
       it('should return a handler which calls a session with message command parameters', async function() {
@@ -371,32 +566,78 @@ describe('Flow Language', function () {
         ]);
       });
 
-      it('should return a handler which takes a session as argument', async function() {
-        var events = [];
-        var fakeSession = {
-          push(path, vars) { events.push({path, vars}); }
-        };
-        var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-        var handler = dialog._compileFlow(
-          (vars, session, path)=> {session.push(path, vars);}
-        , ['compiledPath']);
-        await handler({a:1}, fakeSession, ['providedPath']);
-        expect(events).to.deep.equal([
-          {path:['compiledPath'], vars:{a:1}}
-        ]);
+      context('when provided handlers', function () {
+        it('should pass (vars, session, path) to a command handler', async function() {
+          var events = [];
+          var fakeSession = {
+            push(path, vars) { events.push({path, vars}); }
+          };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow(
+            (vars, session, path)=> {session.push(path, vars);}
+            , ['compiledPath']
+          );
+          await handler({a:1}, fakeSession, ['providedPath']);
+          expect(events).to.deep.equal([
+            {path:['compiledPath'], vars:{a:1}}
+          ]);
+        });
+
+        it('should use the value provided by a handler for message.text', async function () {
+          var events = [];
+          var fakeSession = {
+            async send(params) { events.push({send:params}); },
+            async record(path, vars, value) {
+              events.push({record:{path, vars}});
+              return value;
+            }
+          };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow([
+            {
+              text: (vars, session, path) => fakeSession.record(path, vars, "dynamic-text")
+            }
+          ], ['compiledPath']);
+          await handler({a:1}, fakeSession, ['providedPath']);
+          expect(events.sort(jsonSort)).to.deep.equal([
+            {send:{type:'text', text:'dynamic-text'}},
+            {record: {path:['compiledPath'], vars:{a:1}}}
+          ].sort(jsonSort));
+        });
+
+        // it('should use the value provided by a handler for message.actions', async function () {
+        //   var events = [];
+        //   var fakeSession = {
+        //     async send(params) { events.push({send:params}); },
+        //     async record(path, vars, value) {
+        //       events.push({record:{path, vars}});
+        //       return value;
+        //     }
+        //   };
+        //   var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+        //   var handler = dialog._compileFlow([
+        //     {
+        //       actions: (vars, session, path) => fakeSession.record(path, vars, [{
+        //         { }
+        //       }])
+        //     }
+        //   ], ['compiledPath']);
+        //   await handler({a:1}, fakeSession, ['providedPath']);
+        //   expect(events.sort(jsonSort)).to.deep.equal([
+        //     {send:{type:'text', text:'dynamic-text'}},
+        //     {record: {path:['compiledPath'], vars:{a:1}}}
+        //   ].sort(jsonSort));
+        // });
       });
 
       context('when provided a flow with hierarchical actions', function () {
-        var fakeSession;
-        var events;
         var dialog;
-        var handler;
-        beforeEach(async function () {
-          events = [];
-          fakeSession = { send(params) { events.push(params); }};
+        var topLevelHandler;
+
+        beforeEach(function () {
           dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
-          handler = dialog._compileFlow(
+          topLevelHandler = dialog._compileFlow(
             [
               "Greetings!",
               {
@@ -425,7 +666,7 @@ describe('Flow Language', function () {
                               }
                             }
                           },
-                          {finish:"want something else"}],
+                          {finish:"Want something else?"}],
                         no: ["Oh poo", {finish:"doesn't want something else"}]
                       }
                     }
@@ -450,7 +691,6 @@ describe('Flow Language', function () {
             ],
             ['onStart']
           );
-          await handler({}, fakeSession);
         });
 
         it('the dialog should have the expected payload handlers', function (){
@@ -471,8 +711,10 @@ describe('Flow Language', function () {
           ]);
         });
 
-
-        it('the handler should run the top level commands', function () {
+        it('the top level handler should execute the commands at the beginning of the flow', async function () {
+          var events = [];
+          var fakeSession = { send(params) { events.push(params); }};
+          await topLevelHandler({}, fakeSession);
           expect(events).to.deep.equal([
             { type: 'text', text: 'Greetings!' },
             {
@@ -498,11 +740,63 @@ describe('Flow Language', function () {
             }
           ]);
         });
+
+
+        it('a nested payload handler should have the expected behavior', async function () {
+          var events = [];
+          var fakeSession = {
+            send(params) { events.push({send:params}); },
+            finish(result) { events.push({finish:result}); },
+            postbackActionButton(method, text, args) {
+              return {
+                type: 'postback',
+                text: text,
+                payload: `this.postbackToken(${method},${args})` // would actually be a JWT
+              };
+            }
+          };
+          var handler = dialog._getFlowHandler('TestFlowDialog:onStart.sure.yes');
+          await handler({}, fakeSession, ['onStart']);
+
+          expect(events).to.deep.equal([
+            {send: { type: 'text', text: 'Awesome!' }},
+            {
+              send: {
+                type:'list',
+                items: [
+                  {
+                    title: "cookies",
+                    actions: [
+                      {
+                        text: "order",
+                        type: "postback",
+                        payload: "this.postbackToken(TestFlowDialog:onStart.sure.yes.cookies.order,undefined)"
+                      }
+                    ]
+                  },
+                  {
+                    title: "cream",
+                    actions: [
+                      {
+                        text: "order",
+                        type: "postback",
+                        payload: "this.postbackToken(TestFlowDialog:onStart.sure.yes.cream.order,undefined)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {finish: "Want something else?"}
+          ]);
+        });
+
       });
     });
   });
 });
 
+// useful sort comparison fn when deep-equal checking two arrays of unordered objects
 function jsonSort(x,y) {
   return JSON.stringify(x)>JSON.stringify(y);
 }

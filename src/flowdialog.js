@@ -1,4 +1,5 @@
 import {isObject, isString, isArray, isFunction} from 'util';
+import micromustache from 'micromustache';
 
 import Dialog from './dialog';
 import {sleep} from './util';
@@ -13,7 +14,7 @@ import log from './log';
 // flowObject = waitCommand | messageCommand | ifCommand | startCommand
 // waitCommand = { type: 'wait', seconds: float }
 // conditionalCommand = { type: 'conditional', if: handler, then: flow [, else: flow] }
-// startCommand = { type: 'start', start: startParam, then: flow, thenId: flowPathKey }
+// startCommand = { type: 'start', start: startParam, then: flow, thenId: flowKey }
 // startParam = string | {dialog:string, args:Object} | ([vars [, session[, path]]]) => {dialog, params}
 // messageCommand = listCommand | carouselCommand | textCommand | imageCommand
 // textCommand = {
@@ -46,7 +47,7 @@ import log from './log';
 //  // note that 'then' values may not be returned from dynamically
 //  // generated actions.  This is because 'then' values need to be compiled
 //  // and dynamic evaluation happens at run time
-//  then: flow, // if flow is a handler, handler may return a flowPathKey
+//  then: flow, // if flow is a handler, handler may return a flowKey
 //  thenFlow: Array | string // representing a relative or absolute flow path
 // }
 // item = {
@@ -54,6 +55,7 @@ import log from './log';
 //   description: string,
 //   mediaUrl: string,
 //   mediaType: string,
+//   size: 'compact' | 'large',
 //   actions: [action*] | {id:action*}
 // }
 // flowCommandType = text|image|list|carousel
@@ -80,53 +82,43 @@ export default class FlowDialog extends Dialog {
   }
 
   /**
-   * flowPathKey - Description
+   * flowKey - converts arrays and strings into fully-resolved flowKeys
+   *               MyDialog.flowKey("a.b.c") => "MyDialog:a.b.c"
+   *               MyDialog.flowKey(['a','b','c']) => "MyDialog:a.b.c"
    *
-   * @param {Array} path where elements are strings or unary arrays containing a string
-   *                    E.g., ['shop','shoes','buy'] might represent the user
-   *                    choosing an action button with id=shop, then pressing a
-   *                    button with id=buy associated with the carousel item with
-   *                    id=shoes.
+   * @param {Array|string} path
    *
    * @return {string} returns a string of the form 'DialogName:x.y.z'
    */
-  flowPathKey(path) {
+  flowKey(path) {
     if (isString(path)) {
-      return path.split(":").length==2 ? path : `${this.name}:path`;
-    } else {
-      for (var elt of path) {
-        if (!isString(elt)) {
-          throw new Error(`Unexpected element ${elt} in path ${path}`);
-        }
+      var splitPath = path.split(":");
+      if (splitPath.length==2 && splitPath[0]==this.name) { // if it has 2 components...
+        return path;
+      } else if (splitPath.length==1 && path.length>0) {
+        return `${this.name}:${path}`;
       }
-      return `${this.name}:${path.join(".")}`;
+    } else if (isArray(path) && path.length>0) {
+      var reducedPath = path.reduce(appendFlowPathId,[]); // respects #id semantics
+      return `${this.name}:${reducedPath.join(".")}`;
     }
-  }
-
-  flowPathFromKey(flowPathKey) {
-    if (!isString(flowPathKey)) {
-      throw new Error(`Expecting a string, but received ${flowPathKey}`);
-    }
-
-    var idComponents = flowPathKey.split(':');
-    var pathComponents = idComponents.length>1 ? idComponents[1] : idComponents[0];
-    return pathComponents.split('.');
+    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
   }
 
   _getFlowHandler(path) {
-    var pathName = this.flowPathKey(path);
-    var result = this._flowHandlers[pathName];
+    var fkey = this.flowKey(path);
+    var result = this._flowHandlers[fkey];
     if (!result) {
-      throw new Error(`Attempt to access undefined flowHandler at path ${path.join('.')}`);
+      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
     }
     return result;
   }
 
   _addFlowHandler(path, handler) {
     log.silly('_addFlowHandler(%j, function(){...})', path);
-    var fkey = this.flowPathKey(path);
+    var fkey = this.flowKey(path);
     if (this._flowHandlers[fkey]) {
-      throw new Error(`Attempt to create handler with duplicate id: ${path.join('.')}`);
+      throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
     } else {
       this._flowHandlers[fkey] = handler;
     }
@@ -148,7 +140,7 @@ export default class FlowDialog extends Dialog {
     var result = {};
     for (let id in flows) {
       var flow = flows[id];
-      var flowPath = [...path, id];
+      var flowPath = appendFlowPathId(path, id);
       var handler = this._compileFlow(flow, flowPath);
       result[id] = handler;
     }
@@ -177,6 +169,7 @@ export default class FlowDialog extends Dialog {
         compiledCommands.push(this._compileCommand(cmd, path));
       }
     }
+
     var handler = async (vars, session) => {
       for (let compiledCommand of compiledCommands) {
         await compiledCommand(vars, session, path);
@@ -185,7 +178,6 @@ export default class FlowDialog extends Dialog {
 
     return this._addFlowHandler(path, handler);
   }
-
 
   _compileCommand(cmd, path) {
     if (isMessageType(cmd.type)) {
@@ -196,14 +188,20 @@ export default class FlowDialog extends Dialog {
         case 'finish': return this._compileFinishCommand(cmd, path);
         case 'conditional': return this._compileConditionalCommand(cmd, path);
         case 'wait': return this._compileWaitCommand(cmd);
+        case 'set': return this._compileSetCommand(cmd);
+        //case 'iteration': return this._compileIterationCommand(cmd);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
   }
 
   _compileWaitCommand(cmd) {
-    return async() => { await sleep(cmd.seconds*1000); };
+    return async(vars,session,path) => {
+      var seconds = await expandCommandParam(cmd.seconds, vars, session, path);
+      await sleep(seconds * 1000);
+    };
   }
+
   /**
    * _compileMessageCommand - converts a flow message command
    *            into parameters for Session.send, adding handlers as needed
@@ -216,97 +214,24 @@ export default class FlowDialog extends Dialog {
   _compileMessageCommand(command, path) {
     log.silly('_compileMessageCommand(',command,',',path,')');
 
-    if (command.actions) {
-      var compiledActions = this._compileMessageActions(command.actions, path, 'reply');
-    }
-    if (command.flows) {
-      this.addFlows(command.flows, path);
-    }
-    if (command.items) {
-      var compiledItems = this._compileMessageItems(command.items, path);
-    }
-
     var compiledParams = {
       ...command,
-      actions: undefined,
-      items: undefined,
-      flows: undefined};
-
-    log.silly('_compileMessageCommand(',command,',',path,')=>', compiledParams);
+      actions: this._compileMessageActions(command.actions, path, 'reply'),
+      items: this._compileMessageItems(command.items, path),
+      flows: undefined
+    };
 
     return async (vars, session) => {
-      var expandedParams = deleteUndefinedKeys({
-        ...compiledParams,
-        actions: await this._expandActions(compiledActions, vars, session, path),
-        items: await this._expandItems(compiledItems, vars, session, path)
-      });
+      var expandedParams = await expandCommandParam(
+        compiledParams, vars, session, path
+      );
+
+      log.silly('_compileMessageCommand(',command,',',path,') final expansion =>', expandedParams);
+
       await session.send(expandedParams);
     };
   }
 
-  async _expandActions(actionsHandler, vars, session, path) {
-    if (actionsHandler) {
-      var rawActions = await actionsHandler(vars, session, path);
-      if (!isArray(rawActions)) {
-        throw new Error(`Action handler must return actions in array normal form, but received: ${rawActions}`);
-      }
-      return this._expandRawActions(rawActions, vars, session);
-    }
-  }
-
-
-  /**
-   * _expandRawActions - performs last minute checks,
-   *                replaces thenFlow with appropriate payload
-   *
-   * @param {type} rawActions Description
-   * @param {type} vars       Description
-   * @param {type} session    Description
-   *
-   * @return {type} Description
-   */
-  _expandRawActions(rawActions, vars, session) {
-    return rawActions.map(action => {
-      if (action.then) {
-        throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
-      }
-      if (action.thenFlow) {
-        switch (action.type) {
-          case 'postback':
-            return session.postbackActionButton(
-              this.flowPathKey(action.thenFlow),
-              action.text
-            );
-          case 'reply':
-            return {
-              type: 'reply',
-              text: action.text,
-              payload: this.flowPathKey(action.thenFlow)
-            };
-          default:
-            throw new Error(`Invalid action - thenFlow is only permitted in postback and reply actions: ${action}`);
-        }
-      } else {
-        return action;
-      }
-    });
-  }
-
-  async _expandItems(itemsHandler, vars, session, path) {
-    if (itemsHandler) {
-      var rawItems = await itemsHandler(vars, session, path);
-      return rawItems.map(item=> {
-        if (item.actions) {
-          return {
-            ...item,
-            actions: this._expandRawActions(item.actions)
-          };
-        } else {
-          return item;
-        }
-      });
-    }
-  }
   /**
    * _compileMessageItems - converts a flow message item into Session.send version,
    *                  adding handlers to the dialog as needed
@@ -314,28 +239,31 @@ export default class FlowDialog extends Dialog {
    * @param {type} items Description
    * @param {type} path  Description
    *
-   * @return {Function} (session, path) => ...
+   * @return {Function} (vars, session) => Object
    */
   _compileMessageItems(items, path) {
     log.silly('_compileMessageItems(%j, %j)', items, path);
-    var sendParamItems = [];
-    for (let item of items) {
-      let itemActions;
-      if (item.actions) {
-        itemActions = this._compileMessageActions(item.actions, [...path, item.id], 'postback');
-        sendParamItems.push({...item, actions: itemActions});
-      } else {
-        sendParamItems.push(item);
-      }
+    if (isFunction(items)) {
+      return async (vars, session)=>{
+        var result = await items(vars, session, path);
+        return {
+          ...result,
+          actions: result.actions.map(action=>this._actionWithPayload(action, session))
+        };
+      };
+    } else if (items) {
+      var normalizedItems = normalizeItems(items);
+      var compiledItems = normalizedItems.map(item=>deleteUndefinedKeys({
+        ...item,
+        id: undefined,
+        actions: this._compileMessageActions(
+          item.actions,
+          appendFlowPathId(path, item.id))
+      }));
+      return async (vars, session) => {
+        return expandCommandParam(compiledItems, vars, session, path);
+      };
     }
-    log.silly('_compileMessageItems(%j, %j)=>', items, path, sendParamItems);
-    return async function (vars, session, path) {
-      var expandedItemsParam = [];
-      for (let i in sendParamItems) {
-        expandedItemsParam.push(isFunction(i) ? await i(vars, session, path) : i);
-      }
-      return expandedItemsParam;
-    };
   }
 
   /**
@@ -348,54 +276,80 @@ export default class FlowDialog extends Dialog {
    */
   _compileMessageActions(actions, path, defaultType) {
     log.silly('_compileMessageActions(%j, %j)', actions, path);
-    if (actions) {
+    if (isFunction(actions)) {
+      return async (vars, session)=>{
+        var resolvedActions = await actions(vars, session, path);
+        return resolvedActions.map(action=>this._actionWithPayload(action, session));
+      };
+    } else if (actions) {
       actions = normalizeActions(actions, path, defaultType);
-
-      var sendParamActions = [];
-      for (var action of actions) {
-        var params = {...action};
-        let actionPath = [...path, action.id];
-        let thenHandler;
-        let actionFlowPathKey = this.flowPathKey(actionPath);
-
-        // create or retrieve the thenHandler:
-        if (action.then) {
-          thenHandler = this._compileFlow(action.then, actionPath);
-          delete params.then;
-          params.thenFlow = actionPath;
-        } else if (action.thenFlow) {
-          thenHandler = this._getFlowHandler(action.thenHandler);
-        }
-
-        // depending on the action type,
-        // add an onPostback or onPayload handler:
-        switch (action.type) {
-          case 'postback':
-            log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowPathKey);
-            this.onPostback(actionFlowPathKey, thenHandler);
-            break;
-          case 'reply':
-            log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowPathKey);
-            this.onPayload(actionFlowPathKey, thenHandler);
-            break;
-          default:
-            throw new Error(`Invalid action: then and thenFlow may only be used with `+
-              `postback and reply type actions, but received: ${JSON.stringify(action)}`);
-        }
-
-        sendParamActions.push(params);
-      }
+      var compiledActions = actions.map(action=>this._compileMessageAction(
+        action, path, defaultType
+      ));
+      return async (vars, session)=>{
+        return await Promise.all(compiledActions.map(ca=>ca(vars, session, path)));
+      };
     }
-    log.silly('_compileMessageActions(',actions,',',path,') =>', JSON.stringify(sendParamActions));
+  }
 
-    return () => sendParamActions;
+  /**
+   * _compileMessageAction - Description
+   *
+   * @param {type} action      Description
+   * @param {type} path        Description
+   * @param {type} defaultType Description
+   *
+   * @return {type} Description
+   */
+  _compileMessageAction(action, path, defaultType) {
+    if (isFunction(action)) {
+      return async (vars, session)=>this._actionWithPayload(
+        await action(vars, session, path),
+        session
+      );
+    } else {
+      var actionCopy = {type: defaultType, ...action};
+      let actionPath = appendFlowPathId(path, action.id);
+      let thenHandler;
+      let actionFlowKey = this.flowKey(actionPath);
+
+      // create or retrieve the thenHandler:
+      if (action.then) {
+        thenHandler = this._compileFlow(action.then, actionPath);
+        delete actionCopy.then;
+        actionCopy.thenFlow = actionPath;
+      } else if (action.thenFlow) {
+        thenHandler = this._getFlowHandler(action.thenHandler);
+      }
+
+      // depending on the action type,
+      // add an onPostback or onPayload handler:
+      switch (actionCopy.type) {
+        case 'postback':
+          log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
+          this.onPostback(actionFlowKey, thenHandler);
+          break;
+        case 'reply':
+          log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
+          this.onPayload(actionFlowKey, thenHandler);
+          break;
+        default:
+          throw new Error(`Invalid action: then and thenFlow may only be used with `+
+            `postback and reply type actions, but received: ${JSON.stringify(action)}`);
+      }
+
+      return async (vars, session)=>this._actionWithPayload(
+        await expandCommandParam(actionCopy, vars, session, path),
+        session
+      );
+    }
   }
 
   _compileConditionalCommand(cmd, path) {
     var {id, if:ifHandler, then:thenFlow, else:elseFlow} = cmd;
-    path = [...path, id || 'if'];
-    var thenPath = [...path, 'then'];
-    var elsePath = [...path, 'else'];
+    path = appendFlowPathId(path, id || 'if');
+    var thenPath = appendFlowPathId(path, 'then');
+    var elsePath = appendFlowPathId(path, 'else');
     var thenHandler = this._compileFlow(thenFlow, path);
     var elseHandler = this._compileFlow(elseFlow, path);
 
@@ -433,8 +387,8 @@ export default class FlowDialog extends Dialog {
       startParamFn = ()=>[dialogName, args];
     }
 
-    var thenPath = [...path, `start(${dialogName})`];
-    var tag = this.flowPathKey(thenPath);
+    var thenPath = appendFlowPathId(path, `${cmd.id || dialogName || 'start'}_then`);
+    var tag = this.flowKey(thenPath);
 
     if (then) {
       var thenHandler = this._compileFlow(then, thenPath);
@@ -453,28 +407,138 @@ export default class FlowDialog extends Dialog {
     }
   }
 
-  async _expandObjectParam(session, path, param) {
-    var expandedParam = {};
-    for (var key in param) {
-      var val = param[key];
-      expandedParam[key] = await this._expandParam(session, [...path, key], val);
-    }
-    return expandedParam;
-  }
-
-  async _expandParam(session, path, param) {
-    if (isFunction(param)) {
-      return await param(session);
-    } else if (isArray(param)) {
-      return await this._expandArrayParam(session, path, param);
-    } else if (isObject(param)) {
-      return await this._expandObjectParam(session, path, param);
+  _compileStringParam(text) {
+    if (text) {
+      var renderer = micromustache.compile(text);
+      return (vars)=>renderer.render(vars);
     } else {
-      return param;
+      return ()=>undefined;
     }
   }
-}
 
+
+  async _actionWithPayload(action, session) {
+    log.silly('_actionWithPayload(%j)', action);
+    if (action.then) {
+      throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
+    }
+
+    if (action.thenFlow) {
+      switch (action.type) {
+        case 'postback':
+          return session.postbackActionButton(
+            this.flowKey(action.thenFlow),
+            action.text
+          );
+
+        case 'reply':
+          return {
+            type: 'reply',
+            text: action.text,
+            payload: this.flowKey(action.thenFlow)
+          };
+
+        default:
+          throw new Error(`Invalid action - thenFlow is only permitted in postback and reply actions: ${action}`);
+      }
+    } else {
+      return action;
+    }
+  }
+
+  //
+  // //
+  // // Expanders - Take the output of a compiled parameter, which is a handler fn,
+  // //   and evaluate it against the vars, session, path - and transform the
+  // //   output into params usable by some low-level command.
+  // //
+  // //   Specific purpose is to allow handlers to return high level values
+  // //   as defined by the flow language (e.g., {...thenFlow: flowpath}) and
+  // //   have those transformed (e.g., to payload: session.postbackButton(...))
+  // //   at runtime.  This helps abstract the programmer from the low level
+  // //   logic.
+  // //
+  // //   Currently, items, actions and text parameters are expanded.
+  //
+  // async _expandItems(itemsHandler, vars, session, path) {
+  //   if (itemsHandler) {
+  //     var rawItems = await itemsHandler(vars, session, path);
+  //     var expandedItems = [];
+  //     for (var item of rawItems) {
+  //       var expandedTitle = await this._expandParam(item.title, vars, session, path);
+  //       var expandedDescription = await this._expandParam(item.description, vars, session, path);
+  //       var expandedActions = await this._expandActions(item.actions, vars, session, path);
+  //
+  //       expandedItems.push(deleteUndefinedKeys({
+  //         ...item,
+  //         title: expandedTitle,
+  //         description: expandedDescription,
+  //         actions: expandedActions
+  //       }));
+  //     }
+  //     return expandedItems;
+  //   }
+  // }
+  //
+  // async _expandActions(actionsHandler, vars, session, path) {
+  //   if (isFunction(actionsHandler)) {
+  //     var rawActions = await actionsHandler(vars, session, path);
+  //     if (!isArray(rawActions)) {
+  //       throw new Error(`Action handler must return actions in array normal form, but received: ${rawActions}`);
+  //     }
+  //     return await this._expandRawActions(rawActions, vars, session, path);
+  //   } else if (isArray(actionsHandler)) {
+  //     return this._expandRawAction(actionsHandler, vars, session, path);
+  //   }
+  // }
+  //
+  // /**
+  // * _expandRawActions - performs last minute checks,
+  // *                replaces thenFlow with appropriate payload
+  // *
+  // * @param {type} rawActions Description
+  // * @param {type} vars       Description
+  // * @param {type} session    Description
+  // *
+  // * @return {type} Description
+  // */
+  // async _expandRawActions(rawActions, vars, session, path) {
+  //   if (rawActions) {
+  //     return await Promise.all(rawActions.map(action=>this._expandRawAction(action, vars, session, path)));
+  //   }
+  // }
+  //
+  // async _expandRawAction(action, vars, session, path) {
+  //   log.silly('_expandRawAction(%j, %j, session, %j)', action, vars, path);
+  //   if (action.then) {
+  //     throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
+  //   }
+  //   var expandedText = await this._expandParam(action.text, vars, session, path);
+  //
+  //   if (action.thenFlow) {
+  //     switch (action.type) {
+  //       case 'postback':
+  //         return session.postbackActionButton(
+  //           this.flowKey(action.thenFlow),
+  //           expandedText
+  //         );
+  //
+  //       case 'reply':
+  //         return {
+  //           type: 'reply',
+  //           text: expandedText,
+  //           payload: this.flowKey(action.thenFlow)
+  //         };
+  //
+  //       default:
+  //         throw new Error(`Invalid action - thenFlow is only permitted in postback and reply actions: ${action}`);
+  //     }
+  //   } else {
+  //     return action;
+  //   }
+  // }
+
+}
 
 
 //
@@ -719,4 +783,84 @@ export function deleteUndefinedKeys(o) {
     }
   }
   return o;
+}
+
+//
+// Flow path helpers
+//
+
+export function isValidFlowId(id) {
+  return isString(id) && /^[#]?[^\.#:\r\n]+$/.test(id);
+}
+
+export function appendFlowPathId(path, id) {
+  if (!isValidFlowId(id))  {
+    throw new Error(`Invalid flow id (${id}). Ids must start with a `+
+      `word character or # and must not contain periods or colons.`);
+  }
+  return (id.startsWith('#')) ? [id] : [...path, id];
+}
+
+export function flowIdToText(id) {
+  return id.startsWith("#") ? id.slice(1) : id;
+}
+
+export function flowPathFromKey(flowKey) {
+  if (!isString(flowKey)) {
+    throw new Error(`Expecting a string, but received ${flowKey}`);
+  }
+
+  var idComponents = flowKey.split(':');
+  var pathComponents = idComponents.length>1 ? idComponents[1] : idComponents[0];
+  return pathComponents.split('.');
+}
+
+
+/**
+ * zipPromisesToHash - Takes an array of keys and promises,
+ *                        resolves the promises and assigns the values
+ *
+ *
+ *
+ * @param {type} keys     Description
+ * @param {type} promises Description
+ *
+ * @return {type} Description
+ */
+export async function zipPromisesToHash(keys, promises) {
+  var result = {};
+  var values = await Promise.all(promises);
+  keys.forEach((key, idx) => result[key] = values[idx]);
+  return result;
+}
+
+
+/**
+ * expandCommandParam - deep converts all value handlers and string templates
+ *   in an object or array to their values.
+ *
+ * @param {Object|Array|string|Number|handler} param
+ * @param {Object} vars    Description
+ * @param {Session} session Description
+ * @param {Array} path    Description
+ *
+ * @return {object} The expanded value
+ */
+export async function expandCommandParam(param, vars, session, path) {
+  if (isFunction(param)) {
+    return await param(vars, session, path);
+  } else if (isArray(param)) {
+    return await Promise.all(param.map(elt=>expandCommandParam(elt, vars, session, path)));
+  } else if (isObject(param)) {
+    let keys = Object.keys(param);
+    return deleteUndefinedKeys(await zipPromisesToHash(keys,
+      keys.map(k=>expandCommandParam(
+        param[k], vars, session, path)
+      )
+    ));
+  } else if (isString(param)) {
+    return micromustache.render(param, vars);
+  } else {
+    return param;
+  }
 }

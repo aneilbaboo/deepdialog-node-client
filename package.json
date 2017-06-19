@@ -59,6 +59,7 @@
     "jwt-simple": "0.5.1",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
+    "micromustache": "5.2.0",
     "morgan": "1.8.1",
     "request": "2.79.0",
     "request-promise": "4.1.1",
