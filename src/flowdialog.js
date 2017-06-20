@@ -1,6 +1,7 @@
 import {isObject, isString, isArray, isFunction} from 'util';
 import micromustache from 'micromustache';
 
+import {anyPattern} from './constants';
 import Dialog from './dialog';
 import {sleep} from './util';
 import log from './log';
@@ -380,19 +381,19 @@ export default class FlowDialog extends Dialog {
     var startParamFn;
 
     if (isFunction(start)) {
-      dialogName = null;
+      dialogName = anyPattern;
       startParamFn = start;
     } else {
       [dialogName, args] = normalizeStartParam(start);
       startParamFn = ()=>[dialogName, args];
     }
 
-    var thenPath = appendFlowPathId(path, `${cmd.id || dialogName || 'start'}_then`);
+    var thenPath = appendFlowPathId(path, cmd.id);
     var tag = this.flowKey(thenPath);
 
     if (then) {
       var thenHandler = this._compileFlow(then, thenPath);
-      this.onResult(dialogName, tag, async (session, value) => {
+      this.onResult(dialogName || anyPattern, tag, async (session, value) => {
         await thenHandler(makeHandlerVars(session, value), session, path);
       });
       return async (vars, session) => {

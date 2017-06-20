@@ -1,5 +1,6 @@
 import {expect} from 'chai';
 
+import {anyPattern} from '../src/constants';
 import FlowDialog, {
   isFlow, isFlowCommand, isAction, isActionable,
   isCommandType, isActionType, isMessageType,
@@ -535,21 +536,6 @@ describe('Flow Language', function () {
       });
     });
 
-    // context('_compileMessageItems', function () {
-    //   it('should correctly compile items in a message', function () {
-    //     var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-    //     var compiledItems = dialog._compileMessageItems(normalizeItems({
-    //       type:'list',
-    //       items: {
-    //         a: {
-    //           title: "hello",
-    //           description: ""
-    //         }
-    //       }
-    //     }));
-    //   });
-    // });
-
     context('_compileFlow', function() {
       it('should return a handler which calls a session with message command parameters', async function() {
         var sendParams = [];
@@ -605,29 +591,143 @@ describe('Flow Language', function () {
           ].sort(jsonSort));
         });
 
-        // it('should use the value provided by a handler for message.actions', async function () {
-        //   var events = [];
-        //   var fakeSession = {
-        //     async send(params) { events.push({send:params}); },
-        //     async record(path, vars, value) {
-        //       events.push({record:{path, vars}});
-        //       return value;
-        //     }
-        //   };
-        //   var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-        //   var handler = dialog._compileFlow([
-        //     {
-        //       actions: (vars, session, path) => fakeSession.record(path, vars, [{
-        //         { }
-        //       }])
-        //     }
-        //   ], ['compiledPath']);
-        //   await handler({a:1}, fakeSession, ['providedPath']);
-        //   expect(events.sort(jsonSort)).to.deep.equal([
-        //     {send:{type:'text', text:'dynamic-text'}},
-        //     {record: {path:['compiledPath'], vars:{a:1}}}
-        //   ].sort(jsonSort));
-        // });
+      });
+
+      context('start command', function () {
+        var session;
+        var events;
+        beforeEach(function () {
+          events = [];
+          session = {
+            async start(dialog, args) {
+              events.push(dialog,args);
+            }
+          };
+        });
+
+        it('should call session.start with the provided dialog', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var topLevelHandler = dialog._compileFlow([
+            { start: "MyDialog" }
+          ], ['onStart']);
+          await topLevelHandler({}, session);
+          expect(events).to.deep.equal(["MyDialog", undefined]);
+        });
+
+        it('should call session.start with the provided dialog and args', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var topLevelHandler = dialog._compileFlow([
+            { start: ["MyDialog", {a:1}] }
+          ], ['onStart']);
+          await topLevelHandler({}, session);
+          expect(events).to.deep.equal(["MyDialog", {a:1}]);
+        });
+
+        it('should call session.start with dynamically generated dialog and args', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var topLevelHandler = dialog._compileFlow([
+            { start: async ()=>["MyDialog", {a:1}] }
+          ], ['onStart']);
+          await topLevelHandler({}, session);
+          expect(events).to.deep.equal(["MyDialog", {a:1}]);
+        });
+
+        context('when it contains a then flow,', function () {
+          var dialog;
+
+          beforeEach(function () {
+            dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          });
+
+          it('the dialog should install a result handler with the correct flow key ', function () {
+
+            dialog._compileFlow([{
+              start: ["MyDialog", {a:1}],
+              then: async (vars, session, path) => {
+                await session.push({push:{vars, path}});
+              }
+            }], [
+              'a','b'
+            ]);
+
+            expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
+              "MyDialog|TestFlowDialog:a.b.start(MyDialog)"
+            ]);
+          });
+
+          it('the dialog should install a result handler with the correct flow key '+
+          ' when the dialog name is not known at compile time', function () {
+
+            dialog._compileFlow([{
+              start: ()=> ["MyDialog", {a:1}],
+              then: async (vars, session, path) => {
+                await session.push({push:{vars, path}});
+              }
+            }], [
+              'a','b'
+            ]);
+
+            expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
+              `${anyPattern}|TestFlowDialog:a.b.start(?)`
+            ]);
+          });
+
+          it('the dialog should install a result handler with the correct flow key '+
+          ' when a user-specifies an id', function () {
+
+            dialog._compileFlow([{
+              id: "user-custom-id",
+              start: ()=> ["MyDialog", {a:1}],
+              then: async (vars, session, path) => {
+                await session.push({push:{vars, path}});
+              }
+            }], [
+              'a','b'
+            ]);
+
+            expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
+              `${anyPattern}|TestFlowDialog:a.b.user-custom-id`
+            ]);
+          });
+
+          it('the result handler should call the then flow with the globals,'+
+          ' locals and result value in vars', async function () {
+
+            dialog._compileFlow([{
+              start: ["MyDialog", {a:1}],
+              then: async (vars, session, path) => {
+                await session.push({push:{vars, path}});
+              }
+            }], [
+              'a','b'
+            ]);
+
+            var resultHandler = dialog.getResultHandler('MyDialog|TestFlowDialog:a.b.start(MyDialog)');
+            var session = {
+              get globals() { return {A:1}; },
+              get locals() { return {b:2}; },
+              async push(params) { events.push(params); }
+            };
+
+            await resultHandler(session, "this_is_the_result");
+
+            expect(events).to.deep.equal([
+              {
+                push:{
+                  vars:{value:"this_is_the_result", A:1, b:2},
+                  path: ['a','b', 'start(MyDialog)']
+                }
+              }
+            ]);
+          });
+        });
+
+
+
+
       });
 
       context('when provided a flow with hierarchical actions', function () {

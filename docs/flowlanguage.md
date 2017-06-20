@@ -121,6 +121,8 @@ as a shortcut for:
 }
 ```
 
+Note that strings returned by handlers will not be interpolated.  Within a handler, use Javascript backquote interpolation.
+
 ## Command Types
 
 ### Message commands
