@@ -135,7 +135,7 @@ export default class FlowDialog extends Dialog {
    * @return {Object} An object mapping to handler functions
    */
   _compileFlows(flows, path) {
-    log.silly('_compileFlows(',flows,')');
+    log.silly('_compileFlows(%j)', flows);
     flows = normalizeFlows(flows);
     path = path || [];
     var result = {};
@@ -145,7 +145,7 @@ export default class FlowDialog extends Dialog {
       var handler = this._compileFlow(flow, flowPath);
       result[id] = handler;
     }
-    log.silly('_compileFlows(',flows,')=>',  result);
+    log.silly('_compileFlows(%j)=>', result);
     return result;
   }
 
@@ -159,7 +159,7 @@ export default class FlowDialog extends Dialog {
    * @return {Function} returns a handler
    */
   _compileFlow(flow, path) {
-    log.silly('_compileFlow(',flow,',',path,')');
+    log.silly('_compileFlow(%j,%j)', flow, path);
     flow = normalizeFlow(flow);
     var compiledCommands = [];
 
@@ -213,7 +213,7 @@ export default class FlowDialog extends Dialog {
    * @return {Object} parameters suitable for session.send
    */
   _compileMessageCommand(command, path) {
-    log.silly('_compileMessageCommand(',command,',',path,')');
+    log.silly('_compileMessageCommand(%j,%j)', command, path);
 
     var compiledParams = {
       ...command,
@@ -347,17 +347,20 @@ export default class FlowDialog extends Dialog {
   }
 
   _compileConditionalCommand(cmd, path) {
-    var {id, if:ifHandler, then:thenFlow, else:elseFlow} = cmd;
-    path = appendFlowPathId(path, id || 'if');
-    var thenPath = appendFlowPathId(path, 'then');
-    var elsePath = appendFlowPathId(path, 'else');
-    var thenHandler = this._compileFlow(thenFlow, path);
-    var elseHandler = this._compileFlow(elseFlow, path);
-
+    var {id, if:test, then:thenFlow, else:elseFlow} = cmd;
+    id = id || 'if';
+    if (!thenFlow && !elseFlow) {
+      throw new Error(`Invalid if command %j must contain then or else flow`, cmd);
+    }
+    var thenPath = appendFlowPathId(path, `${id}_then`);
+    var elsePath = appendFlowPathId(path, `${id}_else`);
+    var thenHandler = this._compileFlow(thenFlow, thenPath);
+    var elseHandler = elseFlow ? this._compileFlow(elseFlow, elsePath) : null;
     return async (vars, session) => {
-      if (await ifHandler(vars, session, path)) {
+      var testResult = await expandCommandParam(test, vars, session, path);
+      if (testResult) {
         await thenHandler(vars, session, thenPath);
-      } else {
+      } else if (elseHandler) {
         await elseHandler(vars, session, elsePath);
       }
     };
@@ -544,7 +547,7 @@ export function normalizeFlows(flows) {
 
 export function normalizeFlow(flow) {
   if (isArray(flow)) {
-    log.silly('normalizeFlow(array: ',flow,')');
+    log.silly('normalizeFlow(array: %j)', flow);
     return flow.map(normalizeFlowCommand);
   } else if (!flow) {
     return [];
@@ -554,14 +557,13 @@ export function normalizeFlow(flow) {
 }
 
 export function normalizeFlowCommand(command) {
-  log.silly('normalizeFlowCommand(',command,')');
   if (isFunction(command)) {
     return command;
   } else if (isString(command)) {
-    log.silly('normalizeFlowCommand(string: %j)', command);
     return {type:'text', text:command};
   } else if (isObject(command)) {
     var type = command.type || inferCommandType(command);
+
     if (type) {
       command = {type, ...command};
       switch (type) {
@@ -584,13 +586,13 @@ export function normalizeFlowCommand(command) {
 }
 
 export function normalizeConditionalCommand(command) {
-  log.silly('normalizeConditionalCommand(',command,')');
+  log.silly('normalizeConditionalCommand(%j)', command);
   var id = command.id || 'if';
   return {id, ...command};
 }
 
 export function normalizeStartCommand(command) {
-  log.silly('normalizeStartCommand(',command,')');
+  log.silly('normalizeStartCommand(%j)', command);
   if (!isFunction(command.start)) {
     var [dialog, _] = normalizeStartParam(command.start);
   }
@@ -599,7 +601,7 @@ export function normalizeStartCommand(command) {
 }
 
 export function normalizeMessageCommand(command) {
-  log.silly('normalizeMessageCommand(',command,')');
+  log.silly('normalizeMessageCommand(%j)', command);
   var actions = command.actions ? normalizeActions(command.actions, 'reply') : undefined;
   var items = command.items ? normalizeItems(command.items) : undefined;
   var flows = command.flows ? normalizeFlows(command.flows) : undefined;
@@ -640,7 +642,7 @@ export function normalizeItems(items) {
  * @return {Array} An object conforming to the action specification of the Session.send api
  */
 export function normalizeActions(actions, defaultType) {
-  log.silly('normalizeActions(',actions,',',defaultType,')');
+  log.silly('normalizeActions(%j,%j)', actions, defaultType);
   if (isArray(actions)) {
     return actions.map(action=>normalizeAction(action.id, action, defaultType));
   } else if (isObject(actions)) {
@@ -663,7 +665,7 @@ export function normalizeActions(actions, defaultType) {
 }
 
 export function normalizeAction(id, action, defaultType) {
-  log.silly('normalizeAction(',id,',',action,',',defaultType,')');
+  log.silly('normalizeAction(%j, %j, %j)', id, action, defaultType);
   if (isAction(action)) {
     var type = action.type || inferActionType(action, defaultType);
     return deleteUndefinedKeys({
@@ -749,7 +751,7 @@ export function inferCommandType(command) {
     return 'start';
   } else if (command.wait) {
     return 'wait';
-  } else if (command.if) {
+  } else if (command.hasOwnProperty('if')) {
     return 'conditional';
   }
 }
@@ -772,7 +774,7 @@ export function deleteUndefinedKeys(o) {
 //
 
 export function isValidFlowId(id) {
-  return isString(id) && /^[#]?[^\.#:\r\n]+$/.test(id);
+  return isString(id) && /^[#]?[^\.#:|\r\n]+$/.test(id);
 }
 
 export function appendFlowPathId(path, id) {

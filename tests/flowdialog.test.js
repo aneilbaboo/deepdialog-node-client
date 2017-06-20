@@ -168,14 +168,21 @@ describe('Flow Language', function () {
         expect(isValidFlowId("abcd")).to.be.ok;
         expect(isValidFlowId("_abcd")).to.be.ok;
         expect(isValidFlowId("1")).to.be.ok;
-        expect(isValidFlowId("1234567890()!@$%^&*()_-=_+[]{}|\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
+        expect(isValidFlowId("1234567890()!@$%^&*()_-=_+[]{}\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
       });
       it('should be true for hash ids', function () {
         expect(isValidFlowId("#a")).to.be.ok;
         expect(isValidFlowId("#abcd")).to.be.ok;
         expect(isValidFlowId("#_abcd")).to.be.ok;
         expect(isValidFlowId("#1")).to.be.ok;
-        expect(isValidFlowId("#1234567890()!@$%^&*()_-=_+[]{}|\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
+        expect(isValidFlowId("#1234567890()!@$%^&*()_-=_+[]{}\\;abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ<,>?/")).to.be.ok;
+      });
+      it('should be false if a pipe character is present', function () {
+        expect(isValidFlowId("a|b")).to.be.false;
+      });
+      it('should be false if a carriage return or line feed character is present', function () {
+        expect(isValidFlowId("a\nb")).to.be.false;
+        expect(isValidFlowId("a\rb")).to.be.false;
       });
       it('should be false for a single hash character', function () {
         expect(isValidFlowId("#")).to.be.false;
@@ -183,10 +190,8 @@ describe('Flow Language', function () {
       it('should be false if hash is present after the first character', function () {
         expect(isValidFlowId("a#a")).to.be.false;
       });
-      it('should be false if the id contains invalid characters', function () {
+      it('should be false if the id contains a period', function () {
         expect(isValidFlowId("hello.there")).to.be.false;
-        expect(isValidFlowId("hello\n")).to.be.false;
-        expect(isValidFlowId("hello\r")).to.be.false;
       });
     });
 
@@ -795,6 +800,107 @@ describe('Flow Language', function () {
           ).to.be.true;
         });
 
+      });
+
+      context('conditional command', function () {
+        it('should create the appropriate flow handlers', function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          dialog._compileFlow([
+            { if:true,
+              then:()=>{},
+              else:()=>{}
+            }
+          ], ['onStart']);
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_then')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_else')).to.be.a.function;
+        });
+
+        it('should run the then flow if literal arg to if: is truthy', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var thenStub = sinon.stub();
+          var elseStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { if:true,
+              then:thenStub,
+              else:elseStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(thenStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+          ).to.be.true;
+          expect(elseStub.notCalled).to.be.true;
+        });
+
+        it('should run the else flow if literal arg to if: is falsey', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var thenStub = sinon.stub();
+          var elseStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { if:false,
+              then:thenStub,
+              else:elseStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(thenStub.notCalled).to.be.true;
+          expect(elseStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+          ).to.be.true;
+
+        });
+
+        it('should run the then flow if handler value to if: is truthy', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var ifStub = sinon.stub().returns(true);
+          var thenStub = sinon.stub();
+          var elseStub = sinon.stub();
+
+
+          var handler = dialog._compileFlow([
+            { if:ifStub,
+              then:thenStub,
+              else:elseStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(ifStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart']).calledOnce
+          ).to.be.true;
+          expect(thenStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+          ).to.be.true;
+          expect(elseStub.notCalled).to.be.true;
+        });
+
+        it('should run the else flow if handler value to if: is falsey', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var ifStub = sinon.stub().returns(false);
+          var thenStub = sinon.stub();
+          var elseStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { if:ifStub,
+              then:thenStub,
+              else:elseStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(ifStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart']).calledOnce
+          ).to.be.true;
+          expect(thenStub.notCalled).to.be.true;
+          expect(elseStub.withArgs(
+            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+          ).to.be.true;
+
+        });
       });
 
       context('when provided a flow with hierarchical actions', function () {
