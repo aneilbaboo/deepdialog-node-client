@@ -365,12 +365,7 @@ export default class FlowDialog extends Dialog {
 
   _compileFinishCommand(cmd, path) {
     return async (vars, session) => {
-      var result;
-      if (isFunction(cmd.finish)) {
-        result = await cmd.finish(vars, session, path);
-      } else {
-        result = cmd.finish;
-      }
+      var result = await expandCommandParam(cmd.finish, vars, session, path);
       await session.finish(result);
     };
   }
@@ -379,6 +374,7 @@ export default class FlowDialog extends Dialog {
     var {start, then} = cmd;
     var dialogName, args;
     var startParamFn;
+    var thenPath = appendFlowPathId(path, cmd.id);
 
     if (isFunction(start)) {
       dialogName = anyPattern;
@@ -388,35 +384,20 @@ export default class FlowDialog extends Dialog {
       startParamFn = ()=>[dialogName, args];
     }
 
-    var thenPath = appendFlowPathId(path, cmd.id);
-    var tag = this.flowKey(thenPath);
-
     if (then) {
       var thenHandler = this._compileFlow(then, thenPath);
-      this.onResult(dialogName || anyPattern, tag, async (session, value) => {
+      var tag = this.flowKey(thenPath);
+
+      this.onResult(dialogName, tag, async (session, value) => {
         await thenHandler(makeHandlerVars(session, value), session, path);
       });
-      return async (vars, session) => {
-        var [dialogName, args] = normalizeStartParam(await startParamFn(vars, session, thenPath));
-        await session.start(dialogName, tag, args);
-      };
-    } else {
-      return async (vars, session) => {
-        var [dialogName, args] = normalizeStartParam(await startParamFn(vars, session, thenPath));
-        await session.start(dialogName, args);
-      };
     }
-  }
 
-  _compileStringParam(text) {
-    if (text) {
-      var renderer = micromustache.compile(text);
-      return (vars)=>renderer.render(vars);
-    } else {
-      return ()=>undefined;
-    }
+    return async (vars, session) => {
+      var [dialogName, args] = normalizeStartParam(await startParamFn(vars, session, thenPath));
+      await session.start(dialogName, args, tag);
+    };
   }
-
 
   async _actionWithPayload(action, session) {
     log.silly('_actionWithPayload(%j)', action);

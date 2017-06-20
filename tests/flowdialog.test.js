@@ -599,8 +599,8 @@ describe('Flow Language', function () {
         beforeEach(function () {
           events = [];
           session = {
-            async start(dialog, args) {
-              events.push(dialog,args);
+            async start(dialog, args, tag) {
+              events.push(dialog, args, tag);
             }
           };
         });
@@ -612,7 +612,7 @@ describe('Flow Language', function () {
             { start: "MyDialog" }
           ], ['onStart']);
           await topLevelHandler({}, session);
-          expect(events).to.deep.equal(["MyDialog", undefined]);
+          expect(events).to.deep.equal(["MyDialog", undefined, undefined]);
         });
 
         it('should call session.start with the provided dialog and args', async function () {
@@ -622,7 +622,7 @@ describe('Flow Language', function () {
             { start: ["MyDialog", {a:1}] }
           ], ['onStart']);
           await topLevelHandler({}, session);
-          expect(events).to.deep.equal(["MyDialog", {a:1}]);
+          expect(events).to.deep.equal(["MyDialog", {a:1}, undefined]);
         });
 
         it('should call session.start with dynamically generated dialog and args', async function () {
@@ -632,7 +632,7 @@ describe('Flow Language', function () {
             { start: async ()=>["MyDialog", {a:1}] }
           ], ['onStart']);
           await topLevelHandler({}, session);
-          expect(events).to.deep.equal(["MyDialog", {a:1}]);
+          expect(events).to.deep.equal(["MyDialog", {a:1}, undefined]);
         });
 
         context('when it contains a then flow,', function () {
@@ -724,10 +724,32 @@ describe('Flow Language', function () {
             ]);
           });
         });
+      });
 
+      context('finish command', function () {
+        it('should call session finish with the literal argument to finish', async function () {
+          var result;
+          var session = { async finish(arg) { result=arg; }};
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
+          var handler = dialog._compileFlow([
+            {finish:"the-result"}
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(result).to.equal('the-result');
+        });
 
+        it('should call session finish with the handler result to finish', async function () {
+          var result;
+          var session = { async finish(arg) { result=arg; }};
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
+          var handler = dialog._compileFlow([
+            {finish:async (vars, session, path)=>result={vars,path} }
+          ], ['onStart']);
+          await handler({a:1}, session, []);
+          expect(result).to.deep.equal({vars:{a:1},path:['onStart']});
+        });
       });
 
       context('when provided a flow with hierarchical actions', function () {
