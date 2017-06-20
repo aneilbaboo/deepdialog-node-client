@@ -3,7 +3,7 @@ import micromustache from 'micromustache';
 
 import {anyPattern} from './constants';
 import Dialog from './dialog';
-import {sleep} from './util';
+var util = require('./util'); // so we can stub sleep in tests
 import log from './log';
 
 //
@@ -198,8 +198,8 @@ export default class FlowDialog extends Dialog {
 
   _compileWaitCommand(cmd) {
     return async(vars,session,path) => {
-      var seconds = await expandCommandParam(cmd.seconds, vars, session, path);
-      await sleep(seconds * 1000);
+      var seconds = await expandCommandParam(cmd.wait, vars, session, path);
+      await util.sleep(seconds * 1000); // stubbable in tests
     };
   }
 
@@ -747,7 +747,7 @@ export function inferCommandType(command) {
     return 'finish';
   } else if (command.start) {
     return 'start';
-  } else if (command.seconds) {
+  } else if (command.wait) {
     return 'wait';
   } else if (command.if) {
     return 'conditional';

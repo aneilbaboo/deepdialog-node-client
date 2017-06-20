@@ -1,4 +1,6 @@
 import {expect} from 'chai';
+import sinon from 'sinon';
+var util = require('../src/util'); // need to stub the module
 
 import {anyPattern} from '../src/constants';
 import FlowDialog, {
@@ -12,6 +14,15 @@ import FlowDialog, {
 } from '../src/flowdialog';
 
 describe('Flow Language', function () {
+  var sandbox;
+
+  beforeEach(function () {
+    sandbox = sinon.sandbox.create();
+  });
+
+  afterEach(function () {
+    sandbox.restore();
+  });
 
   describe('FlowDialog definitions', function () {
     context('inferCommandType', function () {
@@ -33,7 +44,7 @@ describe('Flow Language', function () {
         expect(inferCommandType({finish:true})).to.equal('finish');
       });
       it('should be "wait" if "seconds" key is present', function () {
-        expect(inferCommandType({seconds:5})).to.equal("wait");
+        expect(inferCommandType({wait:5})).to.equal("wait");
       });
       it('should be "conditional" if "if" key is present', function () {
         expect(inferCommandType({if:()=>{}})).to.equal("conditional");
@@ -752,6 +763,40 @@ describe('Flow Language', function () {
         });
       });
 
+      context('wait command', function () {
+        var sleepStub;
+        beforeEach(function () {
+          sleepStub = sandbox.stub(util, 'sleep');
+        });
+
+        it('should call sleep with the 1000 * literal argument to wait', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            {wait:5}
+          ], ['onStart']);
+          await handler({}, "the-session", []);
+          expect(sleepStub.withArgs(5000).calledOnce).to.be.true;
+        });
+
+        it('should call sleep with the literal argument to wait', async function () {
+          var valueHandlerStub = sinon.stub();
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          valueHandlerStub.returns(5);
+          var handler = dialog._compileFlow([{
+            wait: valueHandlerStub
+          }], ['onStart']);
+
+          await handler({a:1}, "the-session", []);
+          expect(sleepStub.withArgs(5000).calledOnce).to.be.true;
+          expect(valueHandlerStub.withArgs(
+            sinon.match({a:1}, 'the-session', ['onStart'])).calledOnce
+          ).to.be.true;
+        });
+
+      });
+
       context('when provided a flow with hierarchical actions', function () {
         var dialog;
         var topLevelHandler;
@@ -862,7 +907,6 @@ describe('Flow Language', function () {
             }
           ]);
         });
-
 
         it('a nested payload handler should have the expected behavior', async function () {
           var events = [];

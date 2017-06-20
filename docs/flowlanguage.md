@@ -289,9 +289,9 @@ Actions in carousel and list items are assumed to be of type 'postback', if anot
 Pauses the bot for a specified number of seconds
 
 ```javascript
-{ type: 'wait', seconds: 5}
+{ type: 'wait', wait: 5}
 // same as:
-{ seconds: 5}
+{ wait: 5}
 ```
 
 ### Conditional command
