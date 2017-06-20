@@ -742,6 +742,34 @@ describe('Flow Language', function () {
         });
       });
 
+      context('set command', function () {
+        it('should call session set with the literal argument to set', async function () {
+          var session = { save: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            {set:{b:1}}
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.save.withArgs(
+            sinon.match({b:1})
+          ).calledOnce).to.be.true;
+        });
+
+        it('should call session set with the handler value to set', async function () {
+          var session = { save: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            {set:()=>({b:1})}
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.save.withArgs(
+            sinon.match({b:1})
+          ).calledOnce).to.be.true;
+        });
+      });
+
       context('finish command', function () {
         it('should call session finish with the literal argument to finish', async function () {
           var result;

@@ -188,16 +188,22 @@ export default class FlowDialog extends Dialog {
         case 'start': return this._compileStartCommand(cmd, path);
         case 'finish': return this._compileFinishCommand(cmd, path);
         case 'conditional': return this._compileConditionalCommand(cmd, path);
-        case 'wait': return this._compileWaitCommand(cmd);
-        case 'set': return this._compileSetCommand(cmd);
+        case 'wait': return this._compileWaitCommand(cmd, path);
+        case 'set': return this._compileSetCommand(cmd, path);
         //case 'iteration': return this._compileIterationCommand(cmd);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
   }
 
-  _compileWaitCommand(cmd) {
-    return async(vars,session,path) => {
+  _compileSetCommand(cmd, path) {
+    return async (vars, session) => {
+      await session.save(await expandCommandParam(cmd.set, vars, session, path));
+    };
+  }
+
+  _compileWaitCommand(cmd, path) {
+    return async (vars,session) => {
       var seconds = await expandCommandParam(cmd.wait, vars, session, path);
       await util.sleep(seconds * 1000); // stubbable in tests
     };
@@ -572,6 +578,8 @@ export function normalizeFlowCommand(command) {
         case 'text':
         case 'image':
           return normalizeMessageCommand(command);
+        case 'set':
+          return normalizeSetCommand(command);
         case 'conditional':
           return normalizeConditionalCommand(command);
         case 'start':
@@ -583,6 +591,11 @@ export function normalizeFlowCommand(command) {
   }
 
   throw new Error(`Invalid command: ${JSON.stringify(command)}`);
+}
+
+export function normalizeSetCommand(command) {
+  log.silly('normalizeSetCommand(%j)', command);
+  return command;
 }
 
 export function normalizeConditionalCommand(command) {
@@ -751,6 +764,8 @@ export function inferCommandType(command) {
     return 'start';
   } else if (command.wait) {
     return 'wait';
+  } else if (command.set) {
+    return 'set';
   } else if (command.hasOwnProperty('if')) {
     return 'conditional';
   }
