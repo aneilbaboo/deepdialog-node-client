@@ -1,6 +1,6 @@
 # FlowScript
 
-DeepDialog flows enable developers to script interactions using JSON or YAML data format.  Code-as-data makes it easy to generate bot interactions dynamically.  FlowScript wraps service objects that interact with the DeepDialog API, and provides a high level interface that makes it easy to start dialogs, capture results, program action buttons, and use branching logic and iteration.  The core service objects that interact with the DeepDialog API are covered [here](docs/index.md).
+DeepDialog flows enable developers to script interactions using JSON or YAML data format.  Code-as-data makes it easy to generate bot interactions dynamically.  FlowScript wraps service objects that interact with the DeepDialog API, and provides a high level interface that makes it easy to start dialogs, capture results, program action buttons, and use branching logic and iteration.  The core service objects that interact with the DeepDialog API are covered [here](./index.md).
 
 
 ### Example
