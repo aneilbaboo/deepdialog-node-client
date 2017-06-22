@@ -2,6 +2,73 @@
 
 DeepDialog flows enable developers to script interactions using JSON or YAML data format.  Code-as-data makes it easy to generate bot interactions dynamically.  FlowScript wraps service objects that interact with the DeepDialog API, and provides a high level interface that makes it easy to start dialogs, capture results, program action buttons, and use branching logic and iteration.  The core service objects that interact with the DeepDialog API are covered [here](docs/index.md).
 
+
+### Example
+
+```javascript
+// dialogs/astrologer.js
+import {FlowDialog} from 'deepdialog';
+
+export const Astrologer = new FlowDialog({
+  name: "Astrologer",
+  flows: {
+    onStart: [
+      "Hi, I'm Sybil the Astrologer...",
+      { wait: 2 }, // 2 second pause
+      {
+        start: ["Sys:YesNoPrompt", {
+          text: "I can read your horoscope. Would you like that?"
+        }],
+        then: {
+          if: ({value})=>value,
+          then: {
+            text: "Would you like to subscribe for daily readings?",
+            actions: {
+              yes: [
+                { set: {Subscribed: true} }, //
+                "You are now subscribed for daily readings"
+              ],
+              no: [
+                { set: {Subscribed: false} },
+                "Ok, I won't subscribe you to daily readings"
+              ]
+            }
+          },
+          else: "I'm sorry, I'm just a simple bot.  I can only tell horoscopes."
+        }
+      }
+    ]
+  }
+});
+
+// dialogs/readhoroscope.js
+export {FlowDialog} from 'deepdialog';
+
+export const ReadHoroscope = new FlowDialog({
+  name: 'ReadHoroscope',
+  flows: {
+    start: {
+      if: ({ZodiacSign})=>!ZodiacSign,
+      then: async ({ZodiacSign}) => {
+        var horoscope = await retrieveHoroscope(ZodiacSign),
+        session.send(horoscope);
+      },
+      else: {
+        start: "PickSign",
+        then: {
+          if: {result}=>result,
+          then: async ({result}) => await session.save({ZodiacSign: result});
+        }
+      }
+    }
+  }
+});
+
+// dialogs/picksign.js
+// A dialog which enables the user to choose their Zodiac sign
+// etc.
+```
+
 ## FlowDialog
 
 To get started, you create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog starts.
