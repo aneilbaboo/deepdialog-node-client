@@ -43,3 +43,6 @@ sandbox/*.*
 *.*#
 gitstats
 lib/*
+
+# webstorm
+.idea/

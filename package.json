@@ -1,7 +1,8 @@
 {
   "name": "deepdialog",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Node client for interacting with DeepDialog service",
+  "main": "./lib",
   "repository": {
     "type": "git",
     "url": "https://github.com/aneilbaboo/deepdialog-node-client.git"
@@ -43,7 +44,8 @@
     "eslint-mocha": "0.1.0",
     "eslint-plugin-import": "^2.2.0",
     "eslint-plugin-mocha": "4.7.0",
-    "mocha": "3.2.0"
+    "mocha": "3.2.0",
+    "sinon": "2.3.5"
   },
   "dependencies": {
     "babel-cli": "6.x.x",
@@ -58,6 +60,7 @@
     "jwt-simple": "0.5.1",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
+    "micromustache": "5.2.0",
     "morgan": "1.8.1",
     "request": "2.79.0",
     "request-promise": "4.1.1",

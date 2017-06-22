@@ -198,12 +198,16 @@ export default class Session {
   /**
    * async save - saves session variables to the server
    *
+   * @parama {Object}  values - key-value pairs to set
    * @return {Promise}  description
    */
-  async save() {
+  async save(values) {
+    if (values) {
+      this.set(values);
+    }
 
-    log.debug('Session#save() | locals:%j globals:%j dialog:%s frame:%s session:%s',
-      this.locals, this.globals, this.dialogName, this.frameId, this.id);
+    log.debug('Session#save(%j) | locals:%j globals:%j dialog:%s frame:%s session:%s',
+      values, this.locals, this.globals, this.dialogName, this.frameId, this.id);
 
     this.checkLock();
     var result = await this.client.mutate(`($sessionId: String, $locals: JSON, $globals: JSON) {
@@ -217,8 +221,8 @@ export default class Session {
       locals: this.locals
     });
 
-    log.debug('Session#save() => %j | dialog:%s frame:%s session:%s',
-      result, this.dialogName, this.frameId, this.id);
+    log.debug('Session#save(%j) => %j | dialog:%s frame:%s session:%s',
+      values, result, this.dialogName, this.frameId, this.id);
   }
 
 
