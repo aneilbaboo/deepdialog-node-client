@@ -2,17 +2,81 @@
 
 ## How it works
 
-DeepDialog helps you write more sophisticated chatbots.  Currently, you can
-connect to Facebook, Twitter, WhatsApp, Kik and many other services
-through Smooch.io.  
+DeepDialog helps you write more sophisticated chatbots.  Currently, you can connect to Facebook, Twitter, WhatsApp, Kik and many other services through Smooch.io.  
 
-## Flow Language
+## FlowScript
 
-[The flow language](./flowlanguage.md) is a high level interface that makes it easy to script conversational flows.  This document explains how the DeepDialog service works.
+[FlowScript](./flowscript.md) is a high level language that makes it easy to script conversational flows.  The rest of this document explains how the DeepDialog service works and describes the core service objects.
+
+### FlowScript Example
+
+```javascript
+// dialogs/astrologer.js
+import {FlowDialog} from 'deepdialog';
+
+export const Astrologer = new FlowDialog({
+  name: "Astrologer",
+  flows: {
+    onStart: [
+      "Hi, I'm Sybil the Astrologer...",
+      { wait: 2 }, // 2 second pause
+      {
+        start: ["Sys:YesNoPrompt", {
+          text: "I can read your horoscope. Would you like that?"
+        }],
+        then: {
+          if: ({value})=>value,
+          then: {
+            text: "Would you like to subscribe for daily readings?",
+            actions: {
+              yes: [
+                { set: {Subscribed: true} }, //
+                "You are now subscribed for daily readings"
+              ],
+              no: [
+                { set: {Subscribed: false} },
+                "Ok, I won't subscribe you to daily readings"
+              ]
+            }
+          },
+          else: "I'm sorry, I'm just a simple bot.  I can only tell horoscopes."
+        }
+      }
+    ]
+  }
+});
+
+// dialogs/readhoroscope.js
+export {FlowDialog} from 'deepdialog';
+
+export const ReadHoroscope = new FlowDialog({
+  name: 'ReadHoroscope',
+  flows: {
+    start: {
+      if: ({ZodiacSign})=>!ZodiacSign,
+      then: async ({ZodiacSign}) => {
+        var horoscope = await retrieveHoroscope(ZodiacSign),
+        session.send(horoscope);
+      },
+      else: {
+        start: "PickSign",
+        then: {
+          if: {result}=>result,
+          then: async ({result}) => await session.save({ZodiacSign: result});
+        }
+      }
+    }
+  }
+});
+
+// dialogs/picksign.js
+// A dialog which enables the user to choose their Zodiac sign
+// etc.
+```
 
 ### Dialogs: Functions for Conversational Logic
 
-In DeepDialog, you create and deploy apps to the web.  An app is a container for dialogs, which are bits of reusable conversational logic that are modeled on functions.  Similar to how functions call functions, dialogs can start otherdialogs.  When a dialog finishes, it returns a value to the dialog that started it.  
+In DeepDialog, you create and deploy apps to the web.  An app is a container for dialogs, which are bits of reusable conversational logic that are modeled on functions.  Similar to how functions call functions, dialogs can start other dialogs.  When a dialog finishes, it returns a value to the dialog that started it.  
 
 At any point in a conversation, one dialog is in control.  When a user first interacts with your app, the app's main dialog gets control.  As the main dialog interacts with the user, it can choose to start other dialogs, including dialogs provided by other DeepDialog apps.  As a bot developer this allows you to develop and reuse conversational logic that same way you do with functions.  
 

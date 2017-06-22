@@ -5,7 +5,7 @@ Bot building superpowers.
 ## Documentation
 
 * [How it Works](docs/index.md)
-* [The Flow Language](docs/flowlanguage.md)
+* [FlowScript](docs/flowscript.md)
 
 ## Example
 
@@ -79,7 +79,7 @@ Step by step instructions - or checkout the starter bot:
 
 #### 1. Write Dialogs
 
-Checkout the [Flow Language](docs/flowlanguage.md) for a high-level approach
+Checkout the [FlowScript](docs/flowscript.md) for a high-level approach
 to writing dynamic conversations.
 
 ```javascript

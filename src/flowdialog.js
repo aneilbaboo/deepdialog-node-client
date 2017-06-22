@@ -65,7 +65,7 @@ import log from './log';
 
 
 /**
-* FlowDialog - Allows users to script flows. See the [documentation on github](https://github.com/aneilbaboo/deepdialog-node-client/blob/aneil/flowDialog/docs/flowlanguage.md)
+* FlowDialog - Allows users to script flows. See the [documentation on github](https://github.com/aneilbaboo/deepdialog-node-client/blob/aneil/flowDialog/docs/flowscript.md)
 * @extends Dialog
 */
 export default class FlowDialog extends Dialog {
@@ -444,7 +444,7 @@ export default class FlowDialog extends Dialog {
   // //   output into params usable by some low-level command.
   // //
   // //   Specific purpose is to allow handlers to return high level values
-  // //   as defined by the flow language (e.g., {...thenFlow: flowpath}) and
+  // //   as defined by FlowScript (e.g., {...thenFlow: flowpath}) and
   // //   have those transformed (e.g., to payload: session.postbackButton(...))
   // //   at runtime.  This helps abstract the programmer from the low level
   // //   logic.

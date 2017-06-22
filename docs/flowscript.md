@@ -1,12 +1,10 @@
-# Flow Language
+# FlowScript
 
-## Overview
-
-DeepDialog flows enable developers to script interactions using an intuitive hierarchical data format.  Flows make it easier to use the primitives of the DeepDialog backend.  Starting dialogs, capturing results, programming action buttons, and using branching logic and iterating a sequence of commands can be done with a fraction of the effort, and in a compact readable style.
+DeepDialog flows enable developers to script interactions using JSON or YAML data format.  Code-as-data makes it easy to generate bot interactions dynamically.  FlowScript wraps service objects that interact with the DeepDialog API, and provides a high level interface that makes it easy to start dialogs, capture results, program action buttons, and use branching logic and iteration.  The core service objects that interact with the DeepDialog API are covered [here](docs/index.md).
 
 ## FlowDialog
 
-To get started, you need to create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog starts.
+To get started, you create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog starts.
 
 ```javascript
 import {FlowDialog} from 'deepdialog';
@@ -26,12 +24,13 @@ export const HelloWorld = new FlowDialog({
 
 ## Flows
 
-Flows are sequences of commands, such as sending images and messages to a user, setting variables, etc. Some commands act like control structures in traditional programming languages, enabling conditional branching, iteration, etc.  Each branch in the flow is given a unique name.  This is covered in [Advanced Topics](#advanced-topics) under [Ids And Flow Paths](#ids-and-flow-paths)
+Flows are sequences of commands, such as sending images and messages to a user, setting variables, etc. Some commands act like control structures in traditional programming languages, enabling conditional branching, iteration, etc.  A complete list of all the places flows can appear is covered in [Where Flows Appear](#where-flows-appear).
 
+Each branch in the flow is given a unique name.  This is covered in  [Ids And Flow Paths](#ids-and-flow-paths).
 
 ### The onStart flow
 
-Top level flows are defined in the `flows` argument provided to the FlowDialog constructor.  When a FlowDialog starts, it automatically runs the special onStart flow.  Arguments provided to the dialog are also available in the first argument of handler functions, which are discussed below. The flows parameter also accepts other flows.  See the [Advanced Topics](#advanced-topics) section for more information on how to use these.  
+Top level flows are defined in the `flows` argument provided to the FlowDialog constructor.  When a FlowDialog starts, it automatically runs the special onStart flow.  Arguments provided to the dialog are also available in the first argument of handler functions, which are discussed below. The flows parameter also accepts other flows.  See the [Top Level Flows](#top-level-flows) section.
 
 ## Commands
 
@@ -125,13 +124,12 @@ Note that strings returned by handlers will not be interpolated.  Within a handl
 
 ## Command Types
 
-### Message commands
-
-The flow language supports the same types available in Session.send():
+The most basic kind of command is sending a message to the user.  FlowScript provides commands for each of the message types supported by the DeepDialog API's messageSend endpoint.  
 
 ### text Command
 
 Sends a text message and optional action buttons.
+
 ```javascript
 {
   type: 'text',
@@ -151,7 +149,7 @@ Sends an image with an optional caption and/or buttons buttons.
 {
   type: 'text',
   text: 'What kind of dog is this?',
-  mediaUrl: 'http://imgur.com/ad4by.png',
+  mediaUrl: 'http://i.imgur.com/YRCG8eP.jpg',
   mediaType: 'image/png', // inferred from file extension
   actions: {
     yes: "great"
@@ -207,8 +205,8 @@ Items represent elements in a list or carousel type message.  Items are provided
 // is equivalent to
 { ...
   items: [
-    { id: a, ... },
-    { id: b, ... }
+    { id: 'a', ... },
+    { id: 'b', ... }
   ]
 }
 ```
@@ -229,11 +227,11 @@ Each item has the following structure:
   }
 }
 ```
-The items key can be generated dynamically using a handler.  See the Advanced Topics section.
+The `items` key can be generated dynamically using a handler.  See the section in [Advanced Topics](#dynamically-generate-message-items) section.
 
 #### Action Objects
 
-Like items, the actions can be provided as an Array or Object, or dynamically generated using a handler.
+Like `items`, the `actions` can be provided as an Array or Object, or dynamically generated using a handler.  If `actions` is an array, each object should have an `id` key.
 
 There are several types of action buttons:
 
@@ -277,6 +275,25 @@ There are several types of action buttons:
   text: 'Share my location!'
 }
 ```
+
+### Analyses
+Analyses
+
+analyses
+* intent
+
+```javascript
+analyses: [
+  {
+    intent:'buyTickets',
+    then: {
+
+    }
+  }
+]
+```
+
+*
 
 #### Inference of Reply and Postback Buttons
 
@@ -413,20 +430,38 @@ The finish argument can be a handler:
 { finish({username}) { return username; } }
 ```
 
-### while Command
+### iteration Command
 
 Coming soon.
 
+This command has a number of alternate forms:
+
+#### for iteration
+Sets variables, continues executing the do flow, and updating the
+```javascript
+{ id: 'firstLoop', // required if >1 iteration exists in a then block -
+                    // defaults to ''
+  for: [{x:1}, ({x})=>x<100, {inc:{x:1}}],
+  do: [ ... ]
+}
+```
+#### while Iteration
 Continues executing the then flow while the value returned by the while handler is truthy.
 
 ```javascript
-{ id: 'firstWhile', // required if >1 iteration exists in a then block -
-                    // defaults to 'while'
+{ id: '...', // optional
   while: ({condition})=>condition,
-  then: [ ... ] }
+  do: [ ... ] }
 ```
 
-### forEach Command
+And the converse of `while`, the `until` command:
+```javascript
+{ id: '...', // optional
+  until: ({condition})=>condition,
+  do: [ ... ] }
+```
+
+#### forEach Command
 
 Coming soon.
 
@@ -434,7 +469,7 @@ Iterates over a list.  On each iteration, the special variable `value` is bound 
 
 ```javascript
 { forEach: [4,3,2,1],
-  then: "{{value}}..." }
+  do: "{{value}}..." }
   // sends:
   // 4...
   // 3...
@@ -450,6 +485,16 @@ Iterates over a list.  On each iteration, the special variable `value` is bound 
 ```
 
 ## Advanced Topics
+
+#### Where Flows Appear
+
+Flows can be provided in the following places:
+1. keys of the `flows` Object in the FlowDialog constructor
+2. `then` and `else` in the conditional command
+3. `then` key in the `start` command
+4. `then` key in message actions
+5. keys of the `flows` Object in a message command
+6. `do` key in the iteration command
 
 ### Dynamically Generate Message Items
 
@@ -505,7 +550,6 @@ A point in the conversation flow where the user clicked "yes" then "no" after a 
 ```
 A related concept is the flowKey which is a string written:`"onStart.yes.no"`.
 
-
 #### Why set the id explicitly?
 
 Some commands - conditional and start commands - create default ids.  Why override them?  The system uses flow paths to trigger actions.  For example, when postback buttons persist in a user's message thread.  If you change the flow, the ids referenced by those buttons will not longer exist.  Explicitly naming the ids so they are invariant is one solution to this problem.
@@ -531,6 +575,21 @@ actions: {
 ```
 
 The flow path of this element will be `#placeOrder` and children of this element will have this id as root.
+
+### Top level flows
+
+We've seen the `onStart` top level flow, which is run when a dialog is started.  It appears in the FlowDialog's constructor.    You're free to name additional top-level flows.  You can trigger them by using the `thenFlow` key available in certain commands.
+
+```javascript
+export const MyDialog = new FlowDialog({
+  name: 'MyDialog',
+  flows: {
+    onStart: [ ... ],
+    differentTopLevelFlow: [ ... ], // not executed when MyDialog starts
+    ...
+  }
+});
+```
 
 ### Starting other flows
 

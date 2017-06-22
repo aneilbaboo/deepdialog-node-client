@@ -13,7 +13,7 @@ import FlowDialog, {
   flowIdToText, expandCommandParam, zipPromisesToHash
 } from '../src/flowdialog';
 
-describe('Flow Language', function () {
+describe('FlowScript', function () {
   var sandbox;
 
   beforeEach(function () {
