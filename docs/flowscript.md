@@ -168,6 +168,34 @@ Where,
 
 See also the [Advanced Topics](#advanced-topics) section.
 
+### Named Handlers
+
+In some situations, it may be useful to keep code separate from content, for example, to separate the work of content writers and coders. The FlowDialog takes a `handlers` argument which is a hash from names to handlers.  Like unnamed handlers, named handlers can be sync or async. To invoke a named handler, provide an object of the form:
+
+```javascript
+{ exec: 'nameOfHandler'}
+```
+
+For example:
+
+```javascript
+const MyDialog = new FlowDialog({
+  name: "MyDialog",
+  flows: {
+    onStart: [
+      { exec: 'doSomethingHandler' },
+      { text: {exec: 'returnsTextHandler'} }
+    ]
+  },
+  handlers: {
+    async doSomethingHandler(vars, session, path) {
+      // do somthing here
+    },
+    returnsTextHandler(vars, session, path) { return "hello"; }
+  }
+});
+```
+
 ## String interpolation
 
 The system interpolates keys in vars into strings so you can write:

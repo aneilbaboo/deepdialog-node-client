@@ -6,11 +6,12 @@ import {anyPattern} from '../src/constants';
 import FlowDialog, {
   isFlow, isFlowCommand, isAction, isActionable,
   isCommandType, isActionType, isMessageType,
+  isExecCommand,
   inferCommandType, inferActionType,
-  normalizeFlow, normalizeAction,
+  normalizeFlow, normalizeAction, normalizeExecCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
-  flowIdToText, expandCommandParam, zipPromisesToHash
+  flowIdToText, zipPromisesToHash
 } from '../src/flowdialog';
 
 describe('FlowScript', function () {
@@ -49,6 +50,21 @@ describe('FlowScript', function () {
       it('should be "conditional" if "if" key is present', function () {
         expect(inferCommandType({if:()=>{}})).to.equal("conditional");
       });
+    });
+
+    context('isExecCommand', function () {
+      it('should be false for non-objects, but should not throw errors', function () {
+        expect(isExecCommand(1)).to.be.false;
+        expect(isExecCommand("hello")).to.be.false;
+        expect(isExecCommand([1])).to.be.false;
+      });
+      it("should be false for objects which don't contain a handler key", function () {
+        expect(isExecCommand({type:'hello'})).to.be.false;
+      });
+      it("should be true for objects which contain a handler key", function () {
+        expect(isExecCommand({handler:'hello'})).to.be.false;
+      });
+
     });
 
     context('isCommandType', function () {
@@ -233,6 +249,19 @@ describe('FlowScript', function () {
   });
 
   describe('FlowDialog normalization', function () {
+    context('normalizeExecCommand', function () {
+      it('should normalize an exec command with a string arg', function () {
+        expect(normalizeExecCommand({exec:"handler"})).to.deep.equal({
+          exec: ["handler", {}]
+        });
+      });
+      it('should not transform an array arg', function () {
+        expect(normalizeExecCommand({exec:['handler', {a:1}]})).to.deep.equal({
+          exec: ["handler", {a:1}]
+        });
+      });
+    });
+
     context('normalizeMessageCommand', function () {
       it('should convert actions in a list item into postback buttons', function () {
         expect(normalizeMessageCommand({
@@ -452,6 +481,12 @@ describe('FlowScript', function () {
     });
 
     context('expandCommandParam', function () {
+      var dialog;
+
+      beforeEach(function () {
+        dialog = new FlowDialog({name: "TestFlowDialog"});
+      });
+
       it('should evaluate a function with vars, session and path', async function () {
         var session ={
           async makeValue(vars, path) {
@@ -459,7 +494,7 @@ describe('FlowScript', function () {
           }
         };
         var valueHandler = async (vars, session, path)=>await session.makeValue(vars,path);
-        var result = await expandCommandParam(
+        var result = await dialog._expandCommandParam(
           valueHandler,
           {a:1},
           session,
@@ -472,18 +507,56 @@ describe('FlowScript', function () {
       });
 
       it('should return non-object, non-array, non-string, non-function params as is', async function () {
-        expect(await expandCommandParam(123, {a:1}, "session", ['root'])).to.equal(123);
-        expect(await expandCommandParam(null, {a:1}, "session", ['root'])).to.equal(null);
-        expect(await expandCommandParam(undefined, {a:1}, "session", ['root'])).to.equal(undefined);
+        expect(await dialog._expandCommandParam(123, {a:1}, "session", ['root'])).to.equal(123);
+        expect(await dialog._expandCommandParam(null, {a:1}, "session", ['root'])).to.equal(null);
+        expect(await dialog._expandCommandParam(undefined, {a:1}, "session", ['root'])).to.equal(undefined);
       });
 
       it('should return a rendered string, given a mustache template', async function () {
-        expect(await expandCommandParam(
+        expect(await dialog._expandCommandParam(
           "{{a}} {{b.c.d}}",
           {a:"hello", b:{c:{d:"there"}}},
           "session",
           ['root','child']
         )).to.equal("hello there");
+      });
+
+      it('should expand an non-async exec param', async function () {
+        dialog._namedHandlers = {
+          myAsyncHandler(vars, session, path) {
+            return [vars, session, path];
+          }
+        };
+        expect(await dialog._expandCommandParam({
+          exec: 'myAsyncHandler'
+        },
+        {a:1},
+        "the-session",
+        ['onStart']
+        )).to.deep.equal([
+          {a:1},
+          "the-session",
+          ['onStart']
+        ]);
+      });
+
+      it('should expand an async exec param', async function () {
+        dialog._namedHandlers = {
+          async myAsyncHandler(vars, session, path) {
+            return [vars, session, path];
+          }
+        };
+        expect(await dialog._expandCommandParam({
+          exec: 'myAsyncHandler'
+        },
+        {a:1},
+        "the-session",
+        ['onStart']
+        )).to.deep.equal([
+          {a:1},
+          "the-session",
+          ['onStart']
+        ]);
       });
 
       it('should expand items in a list', async function () {
@@ -493,7 +566,7 @@ describe('FlowScript', function () {
           }
         };
 
-        expect(await expandCommandParam(
+        expect(await dialog._expandCommandParam(
           [ null,
             "{{a}} {{b.c.d}}",
             async (vars, session, path)=>session.makeValue(vars,path),
@@ -509,34 +582,44 @@ describe('FlowScript', function () {
           {template:"hello"}
         ]);
       });
-    });
 
-    it('should expand an Object recursively', async function () {
-      var session ={
-        async makeValue(vars, path) {
-          return {vars,path};
-        }
-      };
-
-      expect(await expandCommandParam(
-        { k1: "{{a}} {{b.c.d}}",
-          k2: {
-            k3: async (vars, session, path)=>session.makeValue(vars,path),
-            k4: [{template:"{{a}}"},  "{{b.c.d}}"]
+      it('should expand an Object recursively', async function () {
+        var session ={
+          async makeValue(vars, path) {
+            return {vars,path};
           }
-        },
-        {a:"hello", b:{c:{d:"there"}}},
-        session,
-        ['root'])
-      ).to.deep.equal({
-        k1:"hello there",
-        k2: {
-          k3:{vars:{a:"hello", b:{c:{d:"there"}}}, path:['root']},
-          k4: [{template:"hello"}, "there"]
-        }
+        };
+
+        dialog._namedHandlers = {
+          async myHandler() { return "customHandlerResult"; }
+        };
+
+        expect(await dialog._expandCommandParam(
+          {
+            k1: "{{a}} {{b.c.d}}",
+            k2: {
+              k3: async (vars, session, path)=>session.makeValue(vars,path),
+              k4: [{template:"{{a}}"},  "{{b.c.d}}"],
+              k5: { exec: 'myHandler' }
+            }
+          },
+          {a:"hello", b:{c:{d:"there"}}},
+          session,
+          ['root'])
+        ).to.deep.equal({
+          k1:"hello there",
+          k2: {
+            k3:{vars:{a:"hello", b:{c:{d:"there"}}}, path:['root']},
+            k4: [{template:"hello"}, "there"],
+            k5: "customHandlerResult"
+          }
+        });
       });
+
     });
+
   });
+
 
   describe('FlowDialog', function () {
     context('constructor', function () {
