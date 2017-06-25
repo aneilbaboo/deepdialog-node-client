@@ -1,13 +1,8 @@
 require('babel-core/register');
 require('babel-polyfill');
 const log = require('../src/log');
-const dotEnv = require('dotEnv');
-try {
-  dotEnv.config();
-} catch (e) {
-  log.warn("Unable to load .env file");
-}
-
+const dotenv = require('dotenv');
+dotenv.config({silent:true});
 log.level = process.env.LOGGER_LEVEL;
 
 process.on('unhandledRejection', function (error) {

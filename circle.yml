@@ -1,0 +1,9 @@
+## Customize the test machine
+machine:
+
+  # Version of node to use
+  node:
+    version: 8.1.2
+
+
+

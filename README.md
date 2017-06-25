@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/aneilbaboo/deepdialog-node-client.svg?style=shield&circle-token=aa75773740dfa392f2564fb3b4ee0fe30fe298f5)](https://circleci.com/gh/aneilbaboo/deepdialog-node-client)
+
 # DeepDialog Node Client
 
 Bot building superpowers.
