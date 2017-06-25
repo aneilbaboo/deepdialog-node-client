@@ -623,11 +623,11 @@ describe('FlowScript', function () {
 
   describe('FlowDialog', function () {
     context('constructor', function () {
-      it('should have an onStart handler when provided a flow named start', function () {
+      it('should have an onStart handler when provided a flow named onStart', function () {
         var dialog = new FlowDialog({
           name:"TestFlowDialog",
           flows: {
-            start: [ {type: "text", text: "hello" } ]
+            onStart: [ {type: "text", text: "hello" } ]
           }
         });
 

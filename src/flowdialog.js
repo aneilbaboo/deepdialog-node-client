@@ -74,8 +74,8 @@ export default class FlowDialog extends Dialog {
     this._flowHandlers = {};
     this._namedHandlers = handlers;
     var compiledFlows = this._compileFlows(flows || {});
-    if (compiledFlows.start) {
-      this.onStart(compiledFlows.start);
+    if (compiledFlows.onStart) {
+      this.onStart(compiledFlows.onStart);
     }
   }
 
