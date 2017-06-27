@@ -645,6 +645,22 @@ A point in the conversation flow where the user clicked "yes" then "no" after a 
 ```
 A related concept is the flowKey which is a string written:`"onStart.yes.no"`.
 
+#### Explicitly Starting Flows
+
+Use the FlowDialog `startFlow` method to provides a method to explicitly start a flow.  E.g.:
+
+```javascript
+export const MyFlowDialog = new FlowDialog({
+  name: "MyFlowDialog",
+  flows: {
+    myFlow: [...]
+  }
+})
+MyFlowDialog.onIntent('some_intent', async (session) => {
+  await this.startFlow(session, 'myFlow');
+});
+```
+
 #### Why set the id explicitly?
 
 Some commands - conditional and start commands - create default ids.  Why override them?  The system uses flow paths to trigger actions.  For example, when postback buttons persist in a user's message thread.  If you change the flow, the ids referenced by those buttons will not longer exist.  Explicitly naming the ids so they are invariant is one solution to this problem.
