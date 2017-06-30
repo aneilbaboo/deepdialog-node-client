@@ -1,8 +1,8 @@
 # FlowScript
 
-FlowScript is a high-level language that lets a chatbot developer write conversational flows using JSON or YAML. Flows are designed to make it easy to read and write chatbot logic.  A flow is a sequence of commands for the bot to execute, and can include buttons, branching logic, and the ability to start modules called dialogs and capture results.  
+FlowScript is a high-level language that lets a chatbot developer write conversational flows using JSON or YAML. A flow is a sequence of commands for the bot to execute, such as sending messages with images and buttons, branching logic, and the ability to start modules called conversational procedures called dialogs.
 
-In practical terms, a flow is a JS Array, and commands are JS Objects, strings or functions.  This means a developer can generate flows programmatically.  In fact, parts of the flow can be generated dynamically when a function (called a handler) is substituted for some part of the data structure.  For example, it's easy to generate buttons with a function which returns an array of Objects representing buttons.  You can drive a conversation
+In practical terms, a flow is a JS Array, and commands are JS Objects, strings or functions.  This means a developer can generate flows programmatically.  Arguments to commands can be generated dynamically by providing a function in place of the string or other literal which is expected.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  
 
  FlowScript provides a high level interface to the DeepDialog API, but also provides access to the lower level service objects (such as the DeepDialog Session). See the documentation [here](./index.md).
 
