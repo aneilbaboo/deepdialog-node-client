@@ -49,7 +49,7 @@ export const Astrologer = new FlowDialog({
 export {FlowDialog} from 'deepdialog';
 
 export const ReadHoroscope = new FlowDialog({
-  name: 'ReadHoroscope',
+  name: "ReadHoroscope",
   flows: {
     start: {
       if: ({ZodiacSign})=>!ZodiacSign,
@@ -85,7 +85,7 @@ export const HelloWorld = new FlowDialog({
   flows: {
     onStart: [
       {
-        type: 'text'
+        type: "text"
         text: "Hello human!"
       }
     ]
@@ -109,8 +109,8 @@ Commands are objects which have a type key.  For example, here is a command whic
 
 ```javascript
 {
-  type: 'text',
-  text: 'Hello!'
+  type: "text",
+  text: "Hello!"
 }
 ```
 
@@ -123,7 +123,7 @@ For example, strings are interpreted as simple text message commands. The follow
 ```javascript
 "Hello!"
 { text: "Hello!" }
-{ type:'text', text: 'Hello!'} // similar to the argument to session.send(...)
+{ type:'text', text: "Hello!"} // similar to the argument to session.send(...)
 ```
 
 In addition, anywhere a flow is expected, it is permissible to supply a single command or an abbreviation of a command.
@@ -177,7 +177,7 @@ See also the [Advanced Topics](#advanced-topics) section.
 In some situations, it may be useful to keep code separate from content, for example, to separate the work of content writers and coders. The FlowDialog takes a `handlers` argument which is a hash from names to handlers.  Like unnamed handlers, named handlers can be sync or async. To invoke a named handler, provide an object of the form:
 
 ```javascript
-{ exec: 'nameOfHandler'}
+{ exec: "nameOfHandler"}
 ```
 
 For example:
@@ -187,8 +187,8 @@ const MyDialog = new FlowDialog({
   name: "MyDialog",
   flows: {
     onStart: [
-      { exec: 'doSomethingHandler' },
-      { text: {exec: 'returnsTextHandler'} }
+      { exec: "doSomethingHandler" },
+      { text: {exec: "returnsTextHandler"} }
     ]
   },
   handlers: {
@@ -231,8 +231,8 @@ Sends a text message and optional action buttons.
 
 ```javascript
 {
-  type: 'text',
-  text: 'Would you like to proceed?',
+  type: "text",
+  text: "Would you like to proceed?",
   actions: {
     yes: "great"    // these are highly abbreviated forms of actions
     no: "oh well"   // see the section on [Action Objects] (#action-objects)
@@ -246,10 +246,10 @@ Sends an image with an optional caption and/or buttons buttons.
 
 ```javascript
 {
-  type: 'text',
-  text: 'What kind of dog is this?',
-  mediaUrl: 'http://i.imgur.com/YRCG8eP.jpg',
-  mediaType: 'image/png', // inferred from file extension
+  type: "text",
+  text: "What kind of dog is this?",
+  mediaUrl: "http://i.imgur.com/YRCG8eP.jpg",
+  mediaType: "image/png", // inferred from file extension
   actions: {
     yes: "great"
     no: "oh well"
@@ -263,23 +263,23 @@ Sends a vertical scrolling list or horizontally scrolling carousel.  Must includ
 
 ```javascript
 {
-  type: 'list', // or carousel
+  type: "list", // or carousel
   displaySettings: { // optional
-    imageAspectRatio: 'square' // 'square' or 'horizontal'
+    imageAspectRatio: "square' // 'square' or 'horizontal"
   },
   items: {
     chocolate: {
       title:'chocolate ice cream',
-      description: 'yummy chocolate icecream',
-      mediaUrl: 'https://aws.com/icecreambot/chocolate.png', // optional
-      size: 'compact', // optional 'compact' or 'large' (default)
+      description: "yummy chocolate icecream",
+      mediaUrl: "https://aws.com/icecreambot/chocolate.png", // optional
+      size: "compact', // optional 'compact' or 'large" (default)
       actions: {
         order: {
-          text: 'buy!'
+          text: "buy!"
           amount: 100
         },
         ingredients: {
-          uri: 'http://icecreambot.com/ingredients/chocolate'
+          uri: "http://icecreambot.com/ingredients/chocolate"
         }
       }
     },
@@ -304,8 +304,8 @@ Items represent elements in a list or carousel type message.  Items are provided
 // is equivalent to
 { ...
   items: [
-    { id: 'a', ... },
-    { id: 'b', ... }
+    { id: "a", ... },
+    { id: "b", ... }
   ]
 }
 ```
@@ -315,10 +315,10 @@ Each item has the following structure:
 ```javascript
 {
   id: "item1", // required for items in an array; default is key in Object format
-  title: 'the title (40 chars)', //
-  description: 'the description (80 chars)',
-  mediaUrl: 'https://domain.com/image.png',
-  mediaType: 'image/png', // optional if  type can be inferred from extension
+  title: "the title (40 chars)", //
+  description: "the description (80 chars)",
+  mediaUrl: "https://domain.com/image.png",
+  mediaType: "image/png", // optional if  type can be inferred from extension
   actions: {
     key1: action1,
     key2: action2,
@@ -337,9 +337,9 @@ There are several types of action buttons:
 * reply - quick reply buttons that disappear after one is clicked
 ```javascript
 {
-  id: 'yes', // inferred from a key in actions, if actions is an object
-  type: 'reply',
-  text: 'why yes!',
+  id: "yes", // inferred from a key in actions, if actions is an object
+  type: "reply",
+  text: "why yes!",
   then: [ ... ] // or...
   thenFlow: ['path','to','a','flow']
 }
@@ -353,17 +353,17 @@ There are several types of action buttons:
 * link - link buttons show a web page
   ```javascript
   {
-    type: 'link', // not necessary, inferred
-    uri: 'http://imgur.com/gallery/C3tx7'
+    type: "link", // not necessary, inferred
+    uri: "http://imgur.com/gallery/C3tx7"
   }
   ```
 * share
   ```javascript
-  { type: 'share' } // no 'text' value!!
+  { type: "share' } // no 'text" value!!
   ```
 * buy
 ```javascript
-{ type: 'buy', amount: 100, currency:'USD'} // buy something for 1 dollar
+{ type: "buy', amount: 100, currency:'USD"} // buy something for 1 dollar
 // equivalent to
 { amount: 100 } // denomination in pennies
 ```
@@ -371,7 +371,7 @@ There are several types of action buttons:
 ```javascript
 {
   type:'locationRequest',
-  text: 'Share my location!'
+  text: "Share my location!"
 }
 ```
 
@@ -405,7 +405,7 @@ Actions in carousel and list items are assumed to be of type 'postback', if anot
 Pauses the bot for a specified number of seconds
 
 ```javascript
-{ type: 'wait', wait: 5}
+{ type: "wait", wait: 5}
 // same as:
 { wait: 5}
 ```
@@ -416,8 +416,8 @@ Run flow conditionally: if/then/else logic
 
 ```javascript
 {
-  id: 'firstIfBlock', // optional - defaults to 'if' if not provided
-  type: 'conditional',  // optional - type is inferred from if/then
+  id: "firstIfBlock', // optional - defaults to 'if" if not provided
+  type: "conditional",  // optional - type is inferred from if/then
   if: myPredicate,  // handler function which returns boolean
   then: ["Wow!", "It is true"], // flow if truthy
   else: "It is false :(" // flow if falsey
@@ -433,12 +433,12 @@ Set session variables
 
 ```javascript
 {
-  type: 'set', // inferred
+  type: "set", // inferred
   set: {
-    address: '420 Paper St.',
-    city: 'Wilmington',
-    state: 'DE'
-    zip: '19886'
+    address: "420 Paper St.",
+    city: "Wilmington",
+    state: "DE"
+    zip: "19886"
   }
 }
 
@@ -462,10 +462,10 @@ Starts a new dialog.
 
 ```javascript
 {
-  id: 'myId', // defaults to start(MyDialog) or start() if not provided
-  type: 'start',
+  id: "myId", // defaults to start(MyDialog) or start() if not provided
+  type: "start",
   start: "PromptDialog",
-  args: {text: 'Enter your name'},
+  args: {text: "Enter your name"},
   async then(vars, session) { // vars.value returned by PromptDialog
     await session.send(`Your name is ${vars.value}`);  
   }
@@ -527,7 +527,7 @@ The finish argument can be a handler:
 
 ```javascript
 {
-  type: 'finish',
+  type: "finish",
   finish: ({username})=>username; // this dialog returns the username
 }
 // or
@@ -543,7 +543,7 @@ This command has a number of alternate forms:
 #### for iteration
 Sets variables, continues executing the do flow, and updating the
 ```javascript
-{ id: 'firstLoop', // required if >1 iteration exists in a then block -
+{ id: "firstLoop", // required if >1 iteration exists in a then block -
                     // defaults to ''
   for: [{x:1}, ({x})=>x<100, {inc:{x:1}}],
   do: [ ... ]
@@ -553,14 +553,14 @@ Sets variables, continues executing the do flow, and updating the
 Continues executing the then flow while the value returned by the while handler is truthy.
 
 ```javascript
-{ id: '...', // optional
+{ id: "...", // optional
   while: ({condition})=>condition,
   do: [ ... ] }
 ```
 
 And the converse of `while`, the `until` command:
 ```javascript
-{ id: '...', // optional
+{ id: "...", // optional
   until: ({condition})=>condition,
   do: [ ... ] }
 ```
@@ -702,7 +702,7 @@ We've seen the `onStart` top level flow, which is run when a dialog is started. 
 
 ```javascript
 export const MyDialog = new FlowDialog({
-  name: 'MyDialog',
+  name: "MyDialog",
   flows: {
     onStart: [ ... ],
     differentTopLevelFlow: [ ... ], // not executed when MyDialog starts
@@ -768,8 +768,8 @@ export const ApplianceSalesDialog = new FlowDialog({
   flows: {
     onStart: {
       start: ['GenericSalesmanDialog', {
-        customerConcernsDialog: 'ApplianceConcernsDialog',
-        productsDialog: 'ApplianceProduct'
+        customerConcernsDialog: "ApplianceConcernsDialog",
+        productsDialog: "ApplianceProduct"
       }]
     }
   }
