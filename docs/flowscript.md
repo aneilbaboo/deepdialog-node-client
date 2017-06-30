@@ -123,7 +123,7 @@ For example, strings are interpreted as simple text message commands. The follow
 ```javascript
 "Hello!"
 { text: "Hello!" }
-{ type:'text', text: "Hello!"} // similar to the argument to session.send(...)
+{ type:"text", text: "Hello!"} // similar to the argument to session.send(...)
 ```
 
 In addition, anywhere a flow is expected, it is permissible to supply a single command or an abbreviation of a command.
@@ -265,14 +265,14 @@ Sends a vertical scrolling list or horizontally scrolling carousel.  Must includ
 {
   type: "list", // or carousel
   displaySettings: { // optional
-    imageAspectRatio: "square' // 'square' or 'horizontal"
+    imageAspectRatio: "square" // 'square' or 'horizontal"
   },
   items: {
     chocolate: {
-      title:'chocolate ice cream',
+      title:"chocolate ice cream",
       description: "yummy chocolate icecream",
       mediaUrl: "https://aws.com/icecreambot/chocolate.png", // optional
-      size: "compact', // optional 'compact' or 'large" (default)
+      size: "compact", // optional 'compact' or 'large" (default)
       actions: {
         order: {
           text: "buy!"
@@ -359,18 +359,18 @@ There are several types of action buttons:
   ```
 * share
   ```javascript
-  { type: "share' } // no 'text" value!!
+  { type: "share" } // no 'text" value!!
   ```
 * buy
 ```javascript
-{ type: "buy', amount: 100, currency:'USD"} // buy something for 1 dollar
+{ type: "buy", amount: 100, currency:"USD" } // buy something for 1 dollar
 // equivalent to
 { amount: 100 } // denomination in pennies
 ```
 * locationRequest
 ```javascript
 {
-  type:'locationRequest',
+  type:"locationRequest",
   text: "Share my location!"
 }
 ```
@@ -384,7 +384,7 @@ analyses
 ```javascript
 analyses: [
   {
-    intent:'buyTickets',
+    intent:"buyTickets",
     then: {
 
     }
