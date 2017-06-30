@@ -1,6 +1,7 @@
 import {isObject, isString, isArray, isFunction} from 'util';
 import micromustache from 'micromustache';
 
+import {setPath} from './objpath';
 import {anyPattern} from './constants';
 import Dialog from './dialog';
 var util = require('./util'); // so we can stub sleep in tests
@@ -211,7 +212,12 @@ export default class FlowDialog extends Dialog {
 
   _compileSetCommand(cmd, path) {
     return async (vars, session) => {
-      await session.save(await this._expandCommandParam(cmd.set, vars, session, path));
+      var expandedVars = await this._expandCommandParam(cmd.set, vars, session, path);
+      var processedVars = {};
+      for (let v in expandedVars) {
+        setPath(processedVars, v, expandedVars[v]);
+      }
+      await session.save(processedVars);
     };
   }
 

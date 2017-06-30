@@ -1,6 +1,10 @@
 # FlowScript
 
-DeepDialog flows enable developers to script interactions using JSON or YAML data format.  Code-as-data makes it easy to generate bot interactions dynamically.  FlowScript wraps service objects that interact with the DeepDialog API, and provides a high level interface that makes it easy to start dialogs, capture results, program action buttons, and use branching logic and iteration.  The core service objects that interact with the DeepDialog API are covered [here](./index.md).
+FlowScript is a high-level language that lets a chatbot developer write conversational flows using JSON or YAML. Flows are designed to make it easy to read and write chatbot logic.  A flow is a sequence of commands for the bot to execute, and can include buttons, branching logic, and the ability to start modules called dialogs and capture results.  
+
+In practical terms, a flow is a JS Array, and commands are JS Objects, strings or functions.  This means a developer can generate flows programmatically.  In fact, parts of the flow can be generated dynamically when a function (called a handler) is substituted for some part of the data structure.  For example, it's easy to generate buttons with a function which returns an array of Objects representing buttons.  You can drive a conversation
+
+ FlowScript provides a high level interface to the DeepDialog API, but also provides access to the lower level service objects (such as the DeepDialog Session). See the documentation [here](./index.md).
 
 
 ### Example
@@ -445,6 +449,11 @@ Set session variables
   // returned key-value pairs which will be set.
   async set({userId}) {return await db.getUserAddress(userId); }
 }
+
+// shorthand for setting a deep attribute
+// child objects are created automatically
+// existing keys in parent objects are retained:
+{ set: {"user.home.address": "420 Paper St."}}
 ```
 
 ### Start command

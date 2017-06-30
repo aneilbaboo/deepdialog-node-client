@@ -851,6 +851,19 @@ describe('FlowScript', function () {
             sinon.match({b:1})
           ).calledOnce).to.be.true;
         });
+
+        it('should call session set, automatically generating objects in a path', async function () {
+          var session = { save: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            {set:()=>({"a.b.c":1, "a.b.d":2, "a.e":3 })}
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.save.withArgs(
+            sinon.match({a:{b:{c:1, d:2}, e:3}})
+          ).calledOnce).to.be.true;
+        });
       });
 
       context('finish command', function () {
