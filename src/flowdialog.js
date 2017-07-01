@@ -76,7 +76,13 @@ export default class FlowDialog extends Dialog {
     this._namedHandlers = handlers;
     var compiledFlows = this._compileFlows(flows || {});
     if (compiledFlows.onStart) {
-      this.onStart(compiledFlows.onStart);
+      this.onStart(async (session) => {
+        await compiledFlows.onStart(
+          makeHandlerVars(session),
+          session,
+          ['onStart']
+        );
+      });
     }
   }
 
@@ -176,6 +182,9 @@ export default class FlowDialog extends Dialog {
     var handler = async (vars, session) => {
       for (let compiledCommand of compiledCommands) {
         await compiledCommand(vars, session, path);
+        // session vars may have changed
+        // update vars before calling the next command
+        vars = {value:vars.value, ...makeHandlerVars(session)};
       }
     };
 
@@ -253,7 +262,6 @@ export default class FlowDialog extends Dialog {
       );
 
       log.silly('_compileMessageCommand(',command,',',path,') final expansion =>', expandedParams);
-
       await session.send(expandedParams);
     };
   }
@@ -271,11 +279,12 @@ export default class FlowDialog extends Dialog {
     log.silly('_compileMessageItems(%j, %j)', items, path);
     if (isFunction(items)) {
       return async (vars, session)=>{
-        var result = await items(vars, session, path);
-        return {
-          ...result,
-          actions: result.actions.map(action=>this._actionWithPayload(action, session))
-        };
+        var itemsArray = await items(vars, session, path);
+
+        return itemsArray.map(item=> ({
+          ...item,
+          actions: item.actions.map(action=>this._actionWithPayload(action, session))
+        }));
       };
     } else if (isExecCommand(items)) {
       return this._compileExecCommand(items, path);
@@ -431,7 +440,7 @@ export default class FlowDialog extends Dialog {
     };
   }
 
-  async _actionWithPayload(action, session) {
+  _actionWithPayload(action, session) {
     log.silly('_actionWithPayload(%j)', action);
     if (action.then) {
       throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
@@ -629,8 +638,10 @@ export function normalizeMessageCommand(command) {
 }
 
 export function normalizeItems(items) {
-  log.silly('normalizeItems(%j)', items);
-  if (isArray(items)) {
+  //log.silly('normalizeItems(%j)', items);
+  if (isFunction(items)) {
+    return items;
+  } else if (isArray(items)) {
     return items.map(item=>({
       ...item,
       actions: normalizeActions(item.actions, 'postback')
