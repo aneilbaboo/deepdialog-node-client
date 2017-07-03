@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 
-import {Session, App, Dialog} from '..';
+import {Session, App, Dialog} from '../src';
 
 describe('Session', function () {
   context('Constructor', function () {
