@@ -7,8 +7,6 @@ import log from './log';
 
 export default class Session {
   constructor({app, id, globals, username, email, displayName, givenName, surname, accessToken, currentFrame}) {
-    assert(app.constructor==App, 'app must be an App instance');
-    assert(id, 'id (session.id)');
     this._app = app;
     this._updateValues({
       id, globals, currentFrame,

@@ -1,4 +1,4 @@
-import {isObject, isString, isArray, isFunction} from 'util';
+import {isObject, isString, isArray, isFunction, isUndefined, isNumber} from 'util';
 import micromustache from 'micromustache';
 
 import {setPath} from './objpath';
@@ -235,7 +235,7 @@ export default class FlowDialog extends Dialog {
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
-        //case 'iteration': return this._compileIterationCommand(cmd);
+        case 'iteration': return this._compileIterationCommand(cmd);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
@@ -487,6 +487,80 @@ export default class FlowDialog extends Dialog {
     };
   }
 
+  _compileIterationCommand(cmd, path, options) {
+    var {id, initializer, condition, increment, do:doFlow} = normalizeIterationCommand(cmd);
+    var compiledInitializer = this._compileIterationInitializer(initializer, path);
+    var compiledCondition = this._compileIterationCondition(condition, path);
+    var compiledIncrement = this._compileIterationIncrement(increment, path);
+    var iterPath = appendFlowPathId(path,id,'do');
+    var compiledDoFlow = this._compileFlow(doFlow, iterPath, options);
+
+    return this._compileFlow([
+      compiledInitializer,
+      {
+        id,
+        if: compiledCondition,
+        then: [
+          compiledDoFlow,
+          compiledIncrement,
+          async (vars, session) => {
+            await this.startFlow(iterPath, session);
+          }
+        ]
+        // TODO: add break pseudo-command - which will start the else flow:
+        //       an empty flow, but which is a named code point:
+        // else: [] // "...path.id.else"
+      }
+    ]);
+  }
+
+  _compileIterationInitializer(preflow, path) {
+    if (isFunction(preflow)) {
+      return preflow;
+    } else if (preflow) {
+      return async (vars, session) => {
+        return await this._expandCommandParam(preflow, vars, session, path);
+      };
+    }
+  }
+
+  _compileIterationCondition(condition, path) {
+    if (isFunction(condition)) {
+      return condition;
+    } else if (isObject(condition)) {
+      return async (vars, session) => {
+        var expandedCondition = await this._expandCommandParam(condition, vars, session, path);
+        for (let varName in condition) {
+          if (vars[varName]>=expandedCondition[varName]) {
+            return false;
+          }
+        }
+        return true;
+      };
+    }
+    throw new Error(`Invalid iteration condition. Expecting a function or `+
+      `object, but received: ${condition}`
+    );
+  }
+
+  _compileIterationIncrement(increment, path) {
+    if (isFunction(increment)) {
+      return increment;
+    } else if (isObject(increment)) {
+      return async (vars, session) => {
+        var expandedIncrement = await this._expandCommandParam(increment, vars, session, path);
+        var iterVars = {};
+        for (let varName in expandedIncrement) {
+          iterVars[varName]=vars[varName]+expandedIncrement[varName];
+        }
+        await session.save(iterVars);
+      };
+    }
+    throw new Error(`Invalid iteration condition. Expecting a function or `+
+      `object, but received: ${increment}`
+    );
+  }
+
   _compileFinishCommand(cmd, path) {
     return async (vars, session) => {
       var result = await this._expandCommandParam(cmd.finish, vars, session, path);
@@ -601,23 +675,6 @@ export default class FlowDialog extends Dialog {
       )
     ));
   }
-
-  // _makeTemplateResolver() {
-  //   var handlers = this._resolvers;
-  //   return function(varName) {
-  //     let resolverMatch = _fnRegex.exec(varName);
-  //     if (resolverMatch) {
-  //       let [handlerName, argsList] = handlerMatch.slice(1,2);
-  //       let args = argsList.split(',').map(s=>s.trim()).filter(s=>s=='');
-  //       let handler = handlers[handlerName];
-  //       if (handler) {
-  //         return handler(...args);
-  //       }
-  //     } else {
-  //       throw "Use default resolver";
-  //     }
-  //   };
-  // }
 }
 
 // const _fnRegex = /(\w+)\([\w,]*\)/;
@@ -677,6 +734,8 @@ export function normalizeFlowCommand(command) {
           return normalizeStartCommand(command);
         case 'exec':
           return normalizeExecCommand(command);
+        case 'iteration':
+          return normalizeIterationCommand(command);
         default:
           return command;
       }
@@ -704,8 +763,80 @@ export function normalizeSetCommand(command) {
 
 export function normalizeConditionalCommand(command) {
   log.silly('normalizeConditionalCommand(%j)', command);
-  var id = command.id || 'if';
-  return {id, ...command};
+  if (command.hasOwnProperty('if')) {
+    return {id: command.id || 'if', ...command};
+  } else if (command.hasOwnProperty('when')) {
+    return {id: command.id || 'when', then: command.do};
+  } else if (command.hasOwnProperty('unless')) {
+    return {id: command.id || 'unless', then: [], else: command.do };
+  }
+}
+
+export function normalizeIterationCommand(command) {
+  log.silly('normalizeIterationCommand(%j)', command);
+
+  if (command.while) {
+    return {
+      id: command.id || 'while',
+      type: 'iteration',
+      condition: command.while,
+      do: command.do
+    };
+  } else if (command.until) {
+    return {
+      id: command.id || 'until',
+      type: 'iteration',
+      condition: async (vars, session)=>!(await command.until(vars, session)),
+      do: command.do
+    };
+  } else if (command.for) {
+    let initializer = normalizeIterationInitializer(command.for[0]);
+    let condition = normalizeIterationCondition(initializer, command.for[1]);
+    let increment = normalizeIterationIncrement(initializer, command.for[2]);
+    return {
+      id: command.id || 'for',
+      type: 'iteration',
+      initializer, condition, increment, do: command.do
+    };
+  }
+  throw new Error(`Invalid iteration command: ${JSON.stringify(command)}`);
+}
+
+export function normalizeIterationInitializer(initializer) {
+  if (isString(initializer)) {
+    return {[initializer]:0};
+  } else if (isFunction(initializer) || isObject(initializer)) {
+    return initializer;
+  } else if (isUndefined(initializer)) {
+    return;
+  }
+  throw new Error(`Invalid initializer in iteration command: ${initializer}`);
+}
+
+export function normalizeIterationCondition(initializer, condition) {
+  if (isNumber(condition) && isObject(initializer)) {
+    let iterVars = Object.keys(initializer);
+    return (vars)=>iterVars.every(iv=>vars[iv]<condition);
+  } else if (isObject(condition)) {
+    let iterVars = Object.keys(condition);
+    return (vars)=>iterVars.every(iv=>vars[iv]<condition);
+  } else if (isFunction(condition)) {
+    return condition;
+  }
+  throw new Error(`Invalid condition in iteration command: ${initializer}`);
+}
+
+export function normalizeIterationIncrement(initializer, increment) {
+  if (isNumber(increment) && isObject(initializer)) {
+    let result = {};
+    for (let varName in initializer) {
+      result[varName] = increment;
+    }
+    return result;
+  } else if (isObject(increment) || isFunction(increment)) {
+    return increment;
+  }
+  throw new Error(`Invalid condition in iteration command: ${initializer}`);
 }
 
 export function normalizeStartCommand(command) {
@@ -930,10 +1061,20 @@ export function inferCommandType(command) {
     return 'wait';
   } else if (command.set) {
     return 'set';
-  } else if (command.hasOwnProperty('if')) {
+  } else if (
+    command.hasOwnProperty('if') ||
+    command.hasOwnProperty('when') ||
+    command.hasOwnProperty('unless')
+  ) { // could be null
     return 'conditional';
   } else if (command.exec) {
     return 'exec';
+  } else if (
+    command.for ||
+    command.hasOwnProperty('while') ||
+    command.hasOwnProperty('until')
+  ) {
+    return 'iteration';
   }
 }
 

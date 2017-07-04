@@ -1,6 +1,11 @@
-import {expect} from 'chai';
+import {isFunction} from 'util';
+
 import sinon from 'sinon';
-var util = require('../src/util'); // need to stub the module
+import chai, {expect} from 'chai';
+import chaiMatchPattern from 'chai-match-pattern';
+chai.use(chaiMatchPattern);
+
+var util = require('../src/util'); // need to require so we can stub the module
 
 import {anyPattern} from '../src/constants';
 import FlowDialog, {
@@ -9,6 +14,7 @@ import FlowDialog, {
   isExecCommand, isFlowBreaker,
   inferCommandType, inferActionType,
   normalizeFlow, normalizeAction, normalizeExecCommand,
+  normalizeIterationCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
   flowIdToText, zipPromisesToHash
@@ -49,6 +55,12 @@ describe('FlowScript', function () {
       });
       it('should be "conditional" if "if" key is present', function () {
         expect(inferCommandType({if:()=>{}})).to.equal("conditional");
+      });
+      it('should be "conditional" if "when" key is present', function () {
+        expect(inferCommandType({when:()=>{}})).to.equal("conditional");
+      });
+      it('should be "conditional" if "unless" key is present', function () {
+        expect(inferCommandType({unless:()=>{}})).to.equal("conditional");
       });
     });
 
@@ -119,7 +131,6 @@ describe('FlowScript', function () {
       it("should be true for objects which contain a handler key", function () {
         expect(isExecCommand({handler:'hello'})).to.be.false;
       });
-
     });
 
     context('isCommandType', function () {
@@ -529,6 +540,80 @@ describe('FlowScript', function () {
         expect(normalizeFlow({text:'hello'})).to.deep.equal([
           {type:'text', text:'hello'}
         ]);
+      });
+    });
+
+    context.only('normalizeIterationCommand', function () {
+      it('should expand the minimal form to increment, condition, initializer components', function () {
+        var normalForm = normalizeIterationCommand({
+          for: ['i', 10, 2],
+          do: "hello {{i}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'for',
+          type: 'iteration',
+          initializer: {i:0},
+          condition: isFunction,
+          increment: {i:2},
+          do: "hello {{i}}"
+        });
+        expect(normalForm.condition({i:0})).to.be.true;
+        expect(normalForm.condition({i:9})).to.be.true;
+        expect(normalForm.condition({i:10})).to.be.false;
+        expect(normalForm.condition({i:100})).to.be.false;
+      });
+
+      it('should leave the normal form as is', function () {
+        var normalForm = normalizeIterationCommand({
+          for: [{i:1}, 10, {i:5}],
+          do: "hello {{i}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'for',
+          type: 'iteration',
+          initializer: {i:1},
+          condition: isFunction,
+          increment: {i:5},
+          do: "hello {{i}}"
+        });
+      });
+
+      it('should correctly transform a while expression', function () {
+        var normalForm = normalizeIterationCommand({
+          while: ({x})=>!x, // flip the boolean
+          do: "hello {{x}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'while',
+          type: 'iteration',
+          condition: isFunction,
+          do: "hello {{x}}"
+        });
+        expect(normalForm.initializer).to.not.be.defined;
+        expect(normalForm.increment).to.not.be.defined;
+
+        // the condition flips the boolean in var x
+        expect(normalForm.condition({x:true})).to.be.false;
+        expect(normalForm.condition({x:false})).to.be.ok;
+      });
+
+      it('should correctly transform an until expression', async function () {
+        var normalForm = normalizeIterationCommand({
+          until: ({x})=>!x, // flip the boolean
+          do: "hello {{x}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'until',
+          type: 'iteration',
+          condition: isFunction,
+          do: "hello {{x}}"
+        });
+        expect(normalForm.initializer).to.not.be.defined;
+        expect(normalForm.increment).to.not.be.defined;
+
+        // until should flip the boolean twice
+        expect(await normalForm.condition({x:true})).to.be.ok;
+        expect(await normalForm.condition({x:false})).to.be.false;
       });
     });
   });
@@ -1227,6 +1312,12 @@ describe('FlowScript', function () {
             { type: 'text', text: 'then' },
             { type: 'text', text: 'next' }
           ]);
+        });
+      });
+
+      context('iteration command', function () {
+        context('using for syntax,', function () {
+          it('should install a ');
         });
       });
 
