@@ -6,7 +6,7 @@ import {anyPattern} from '../src/constants';
 import FlowDialog, {
   isFlow, isFlowCommand, isAction, isActionable,
   isCommandType, isActionType, isMessageType,
-  isExecCommand,
+  isExecCommand, isFlowBreaker,
   inferCommandType, inferActionType,
   normalizeFlow, normalizeAction, normalizeExecCommand,
   normalizeActions, normalizeMessageCommand,
@@ -49,6 +49,49 @@ describe('FlowScript', function () {
       });
       it('should be "conditional" if "if" key is present', function () {
         expect(inferCommandType({if:()=>{}})).to.equal("conditional");
+      });
+    });
+
+    context('isFlowBreaker', function () {
+      it('should be true for a conditional command', function () {
+        expect(isFlowBreaker({type:'conditional'})).to.be.ok;
+      });
+      it('should be true for a start command', function () {
+        expect(isFlowBreaker({type:'start'})).to.be.ok;
+      });
+      it('should be true for an iteration command', function () {
+        expect(isFlowBreaker({type:'iteration'})).to.be.ok;
+      });
+      it('should be false for a simple message command', function () {
+        expect(isFlowBreaker({type:'text'})).to.be.false;
+      });
+      it('should be true for a message command with actions with then flows', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          actions:[{type:'reply', then:'dothen'}]
+        })).to.be.true;
+      });
+      it('should be false for a message command with actions with no then flows', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          actions:[{type:'link', uri:'https://..'}]
+        })).to.be.false;
+      });
+      it('should be true for a message command with items with actions with then flows', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          items: [
+            { actions:[{type:'reply', then:'dothen'}] }
+          ]
+        })).to.be.true;
+      });
+      it('should be false for a message command with items with actions with no then flows', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          items: [
+            { actions:[{type:'link', uri:'https://..'}] }
+          ]
+        })).to.be.false;
       });
     });
 
@@ -222,6 +265,17 @@ describe('FlowScript', function () {
       });
       it('should reset the path when a hash id is provided', function () {
         expect(appendFlowPathId(['a','b','c'],"#d")).to.deep.equal(['#d']);
+      });
+      it('should handle multiple ids correctly', function () {
+        expect(appendFlowPathId(['a','b'], 'c','d')).to.deep.equal([
+          'a','b','c','d'
+        ]);
+        expect(appendFlowPathId(['a','b'], '#c','d')).to.deep.equal([
+          '#c','d'
+        ]);
+        expect(appendFlowPathId(['a','b'], 'c','#d')).to.deep.equal([
+          '#d'
+        ]);
       });
     });
 
@@ -635,7 +689,40 @@ describe('FlowScript', function () {
       });
     });
 
-    context('_compileFlow', function() {
+    context('#flowKey', function () {
+      var dialog;
+      beforeEach(function () {
+        dialog = new FlowDialog({ name: "TestDialog" });
+      });
+
+      it('should return a flowKey given a path', function () {
+        expect(dialog.flowKey(['a'])).to.equal('TestDialog:a');
+        expect(dialog.flowKey(['a','b','c'])).to.equal('TestDialog:a.b.c');
+        expect(dialog.flowKey(['a','b','#c'])).to.equal('TestDialog:#c');
+      });
+
+      it('should return a flowKey given a string missing the dialog name', function () {
+        expect(dialog.flowKey('a')).to.equal('TestDialog:a');
+        expect(dialog.flowKey('a.b.c')).to.equal('TestDialog:a.b.c');
+      });
+
+      it('should return a flowKey given a fully-resolved flowKey', function () {
+        expect(dialog.flowKey('TestDialog:a.b.c')).to.equal('TestDialog:a.b.c');
+      });
+
+      it('should return a flowKey given a fully-resolved flowKey', function () {
+        expect(dialog.flowKey('TestDialog:a.b.c')).to.equal('TestDialog:a.b.c');
+      });
+
+      it('should throw an error in other situations', function () {
+        expect(()=>dialog.flowKey('TestDialog:')).to.throw();
+        expect(()=>dialog.flowKey('DifferentDialog:a.b.c')).to.throw();
+        expect(()=>dialog.flowKey('a:b:c')).to.throw();
+        expect(()=>dialog.flowKey({a:1})).to.throw();
+      });
+    });
+
+    context('#_compileFlow', function() {
       it('should return a handler which calls a session with message command parameters', async function() {
         var sendParams = [];
         var fakeSession = {send(params) { sendParams.push(params); }};
@@ -736,9 +823,14 @@ describe('FlowScript', function () {
 
         context('when it contains a then flow,', function () {
           var dialog;
+          var session;
 
           beforeEach(function () {
             dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            session = {
+              push(args) { events.push({push:args}); },
+              send(params) { events.push({send:params}); }
+            };
           });
 
           it('the dialog should install a result handler with the correct flow key ', function () {
@@ -752,8 +844,30 @@ describe('FlowScript', function () {
               'a','b'
             ]);
 
+            expect(dialog._flowHandlers['TestFlowDialog:a.b.start(MyDialog).then']).to.be.ok;
+
             expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
-              "MyDialog|TestFlowDialog:a.b.start(MyDialog)"
+              "MyDialog|TestFlowDialog:a.b.start(MyDialog).then"
+            ]);
+
+          });
+
+          it('the dialog result handler should execute code', async function () {
+            dialog._compileFlow([{
+              start: ()=> ["MyDialog", {a:1}],
+              then: async (vars, session, path) => {
+                await session.push({vars, path});
+              }
+            }], [
+              'a','b'
+            ]);
+
+            var onResultFlowHandler = dialog._getFlowHandler('TestFlowDialog:a.b.start(?).then');
+
+            await onResultFlowHandler({a:1}, session, []);
+
+            expect(events).to.deep.equal([
+              {push:{ vars: {a:1}, path:['a','b','start(?)','then']}}
             ]);
           });
 
@@ -770,7 +884,7 @@ describe('FlowScript', function () {
             ]);
 
             expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
-              `${anyPattern}|TestFlowDialog:a.b.start(?)`
+              `${anyPattern}|TestFlowDialog:a.b.start(?).then`
             ]);
           });
 
@@ -788,7 +902,7 @@ describe('FlowScript', function () {
             ]);
 
             expect(Object.keys(dialog.resultHandlers)).to.deep.equal([
-              `${anyPattern}|TestFlowDialog:a.b.user-custom-id`
+              `${anyPattern}|TestFlowDialog:a.b.user-custom-id.then`
             ]);
           });
 
@@ -804,7 +918,7 @@ describe('FlowScript', function () {
               'a','b'
             ]);
 
-            var resultHandler = dialog.getResultHandler('MyDialog|TestFlowDialog:a.b.start(MyDialog)');
+            var resultHandler = dialog.getResultHandler('MyDialog|TestFlowDialog:a.b.start(MyDialog).then');
             var session = {
               get globals() { return {A:1}; },
               get locals() { return {b:2}; },
@@ -817,11 +931,42 @@ describe('FlowScript', function () {
               {
                 push:{
                   vars:{value:"this_is_the_result", A:1, b:2},
-                  path: ['a','b', 'start(MyDialog)']
+                  path: ['a','b', 'start(MyDialog)', 'then']
                 }
               }
             ]);
           });
+
+          context('when options.nextFlow is set,', function () {
+            beforeEach(function () {
+              dialog._addFlowHandler(['the-next-flow'], function (vars, session) {
+                session.push({vars, nextFlow:true});
+              });
+              dialog._compileFlow([
+                {
+                  id: "user-custom-id",
+                  start: ()=> ["MyDialog", {a:1}],
+                  then: async (vars, session, path) => {
+                    await session.push({vars, path});
+                  }
+                }
+              ], [
+                'a','b'
+              ],
+              { nextFlow: ['the-next-flow'] });
+            });
+
+            it('the dialog should install a result handler that invokes the nextFlow', async function () {
+              var resultHandler = dialog._getFlowHandler('TestFlowDialog:a.b.user-custom-id.then');
+
+              await resultHandler({a:1, value:'the-value'}, session, []);
+              expect(events).to.deep.equal([
+                {push: {vars: {a:1, value:'the-value'}, path:['a','b','user-custom-id', 'then']}},
+                {push: {vars: {}, nextFlow:true}}  // vars constructed from session
+              ]);
+            });
+          });
+
         });
       });
 
@@ -1025,6 +1170,172 @@ describe('FlowScript', function () {
           ).to.be.true;
 
         });
+
+        it('should run the nextFlow if the test is true and a nextFlow is provided', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var ifStub = sinon.stub().returns(true);
+          var events = [];
+          var session = { async send(params) { events.push(params); }};
+
+          var handler = dialog._compileFlow([
+            { if:ifStub,
+              then:"then",
+              else:"else"
+            },
+            "next"
+          ], ['onStart']);
+
+          await handler({}, session, []);
+
+          expect(events).to.deep.equal([
+            { type: 'text', text: 'then' },
+            { type: 'text', text: 'next' }
+          ]);
+        });
+
+        it('should run the nextFlow if the test is true and a nextFlow is provided', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var ifStub = sinon.stub().returns(true);
+          var events = [];
+          var session = { async send(params) { events.push(params); }};
+
+          var handler = dialog._compileFlow([
+            { if:ifStub,
+              then:"then",
+              else:"else"
+            },
+            { id:'afterIf',
+              text: "next"
+            }
+          ], ['onStart']);
+
+          await handler({}, session, []);
+
+          expect(events).to.deep.equal([
+            { type: 'text', text: 'then' },
+            { type: 'text', text: 'next' }
+          ]);
+        });
+      });
+
+      context('message command', function () {
+        context('containing a postback action with a then flow', function () {
+          it('should add a flow handler for the then action', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                actions: {
+                  postback: { type: 'postback', then: 'postback action'}
+                }
+              }
+            ], [
+              'onStart'
+            ]);
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:onStart.postback'
+            );
+            expect(dialog.postbackHandlers).to.have.keys(
+              'TestFlowDialog:onStart.postback'
+            );
+
+            var postbackHandler = dialog._getFlowHandler('onStart.postback');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await postbackHandler({a:1},session);
+
+            expect(events).to.deep.equal([{
+              type: 'text',
+              text: 'postback action'
+            }]);
+          });
+
+          it('should add a next flow handler if a next flow exists', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                actions: {
+                  postback: { type: 'postback', then: 'postback action'}
+                }
+              },
+              "this is",
+              "the next flow"
+            ], [
+              'onStart'
+            ]);
+
+            var postbackHandler = dialog._getFlowHandler('onStart.postback');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await postbackHandler({a:1},session);
+
+            expect(events).to.deep.equal([
+              { type: 'text', text: 'postback action' },
+              { type: 'text', text: 'this is' },
+              { type: 'text', text: 'the next flow' }
+            ]);
+          });
+        });
+
+        context('containing a reply action with a then flow', function () {
+          it('should add a flow handler for the then action', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                actions: {
+                  reply: { type: 'reply', then: 'reply action'}
+                }
+              }
+            ], [
+              'onStart'
+            ]);
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:onStart.reply'
+            );
+
+            var replyHandler = dialog._getFlowHandler('onStart.reply');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await replyHandler({a:1},session);
+
+            expect(events).to.deep.equal([{
+              type: 'text',
+              text: 'reply action'
+            }]);
+          });
+
+          it('should add a next flow handler if a next flow exists', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                actions: {
+                  reply: { type: 'reply', then: 'reply action'}
+                }
+              },
+              "this is",
+              "the next flow"
+            ], [
+              'onStart'
+            ]);
+
+            var replyHandler = dialog._getFlowHandler('onStart.reply');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await replyHandler({a:1},session);
+
+            expect(events).to.deep.equal([
+              { type: 'text', text: 'reply action' },
+              { type: 'text', text: 'this is' },
+              { type: 'text', text: 'the next flow' }
+            ]);
+          });
+        });
+
       });
 
       context('when provided a flow with hierarchical actions', function () {
@@ -1182,8 +1493,9 @@ describe('FlowScript', function () {
                   }
                 ]
               }
-            },
-            {finish: "Want something else?"}
+            }
+            // doesn't contain {finish: "Want something else?"}
+            // because previous command is a flow breaker
           ]);
         });
 
