@@ -1,5 +1,5 @@
 echo "> Start transpiling ES2015"
 echo ""
-./node_modules/.bin/babel src --out-dir lib
+npm run build
 echo ""
 echo "> Complete transpiling ES2015"

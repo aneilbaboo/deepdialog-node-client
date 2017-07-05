@@ -46,3 +46,4 @@ lib/*
 
 # webstorm
 .idea/
+dist

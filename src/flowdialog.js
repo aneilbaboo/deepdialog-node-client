@@ -281,14 +281,21 @@ export default class FlowDialog extends Dialog {
    */
   _compileMessageCommand(command, path, options={}) {
     log.silly('_compileMessageCommand(%j,%j)', command, path);
-
     var compiledParams = {
       ...command,
       actions: this._compileMessageActions(command.actions, path, options, 'reply'),
       items: this._compileMessageItems(command.items, path, options),
-      flows: undefined,
+      postbackFlows: undefined,
+      replyFlows: undefined,
       id: undefined
     };
+
+    if (command.postbackFlows) {
+      this._compilePostbackFlows(command.postbackFlows, path, options);
+    }
+    if (command.replyFlows) {
+      this._compileReplyFlows(command.replyFlows, path, options);
+    }
 
     return async (vars, session) => {
       var expandedParams = await this._expandCommandParam(
@@ -297,7 +304,41 @@ export default class FlowDialog extends Dialog {
 
       log.silly('_compileMessageCommand(',command,',',path,') final expansion =>', expandedParams);
       await session.send(expandedParams);
+
+      var {items,actions} = expandedParams;
+
+      if (isFlowBreaker(command) && options.nextFlow) {
+        // this command broke the flow.  That may be because it had dynamic
+        // items or actions.  However, it is possible that the generated
+        // items/actions are not actually flow-breaking (i.e., no reply actions).
+        // If so, we need to immediately resume the nextFlow
+        if (!itemsHasFlowBreakers(items) && !actionsHasFlowBreakers(actions)) {
+          await this.startFlow(options.nextFlow, session);
+        }
+      }
     };
+  }
+
+  _compilePostbackFlows(flows, path, options) {
+    let postbackFlows = this._compileFlows(flows, path, options);
+    for (let flowId in postbackFlows) {
+      let flowHandler = postbackFlows[flowId];
+      let flowKey = this.flowKey(appendFlowPathId(path, flowId));
+      this.onPostback(flowKey, async (session, value) => {
+        await flowHandler(makeHandlerVars(session, value), session, path);
+      });
+    }
+  }
+
+  _compileReplyFlows(flows, path, options) {
+    let replyFlows = this._compileFlows(flows, path, options);
+    for (let flowId in replyFlows) {
+      let flowHandler = replyFlows[flowId];
+      let flowKey = this.flowKey(appendFlowPathId(path, flowId));
+      this.onPayload(flowKey, async (session) => {
+        await flowHandler(makeHandlerVars(session), session, path);
+      });
+    }
   }
 
   /**
@@ -405,7 +446,9 @@ export default class FlowDialog extends Dialog {
       switch (actionCopy.type) {
         case 'postback':
           log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
-          this.onPostback(actionFlowKey, thenHandler);
+          this.onPostback(actionFlowKey, async (session, args) => {
+            await thenHandler(makeHandlerVars(session, args), session, path);
+          });
           break;
         case 'reply':
           log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
@@ -496,7 +539,8 @@ export default class FlowDialog extends Dialog {
         case 'postback':
           return session.postbackActionButton(
             this.flowKey(action.thenFlow),
-            action.text
+            action.text,
+            action.value
           );
 
         case 'reply':
@@ -822,20 +866,21 @@ export function isFlowBreaker(cmd) {
       cmd.type=='start' ||
       (
         isMessageType(cmd.type) && (
-          actionsHasFlows(cmd.actions) ||
-          itemsHasFlows(cmd.items)
+          actionsHasFlowBreakers(cmd.actions) ||
+          itemsHasFlowBreakers(cmd.items) ||
+          cmd.replyFlows
         )
       )
     )
   );
 }
 
-export function itemsHasFlows(items) {
-  return items && items.some(item=>actionsHasFlows(item.actions));
+export function itemsHasFlowBreakers(items) {
+  return isFunction(items) || (items && items.some(item=>actionsHasFlowBreakers(item.actions)));
 }
 
-export function actionsHasFlows(actions) {
-  return actions && actions.some(action=>action.then);
+export function actionsHasFlowBreakers(actions) {
+  return isFunction(actions) || (actions && actions.some(action=>action.type=='reply'));
 }
 
 export function isExecCommand(obj) {
