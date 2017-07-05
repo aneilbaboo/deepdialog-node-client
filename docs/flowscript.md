@@ -672,7 +672,7 @@ export const MyFlowDialog = new FlowDialog({
   }
 })
 MyFlowDialog.onIntent('some_intent', async (session) => {
-  await this.startFlow(session, 'myFlow');
+  await this.startFlow('myFlow', session);
 });
 ```
 

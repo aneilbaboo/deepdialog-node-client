@@ -86,7 +86,7 @@ export default class FlowDialog extends Dialog {
     }
   }
 
-  async startFlow(session, path) {
+  async startFlow(path, session) {
     await this._getFlowHandler(path)(makeHandlerVars(session), session, path);
   }
 
