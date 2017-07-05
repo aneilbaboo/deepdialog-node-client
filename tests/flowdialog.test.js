@@ -1257,7 +1257,10 @@ describe('FlowScript', function () {
               {
                 type: 'text',
                 actions: {
-                  postback: { type: 'postback', then: 'postback action'}
+                  postback: {
+                    type: 'postback',
+                    then: 'postback action'
+                  }
                 }
               },
               "this is",

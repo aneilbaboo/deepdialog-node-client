@@ -623,25 +623,30 @@ Generate them on the fly:
 
 ```javascript
 {
- text: "What kind of ice cream do you want?",
- async actions (vars, session, path) { // ignore vars and session
-   var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
-   return iceCreamTypes.map(type=>({
-     id: type,
-     text: type,
-     start: ["OrderIceCream", {type:type}],
-     value: type,
-     thenFlow: [...path, 'orderComplete']
-   }));
- },
- flows: {
-   orderComplete: "Hope you enjoyed the {{value}}!"
-   }
- }
+  text: "What kind of ice cream do you want?",
+  async actions (vars, session, path) { // ignore vars and session
+    var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
+    return iceCreamTypes.map(iceCreamType=>({
+      text: iceCreamType, // button text
+      type: 'postback', // non-disappearing button
+      value: type, // let the postback flow know which type was selected
+      thenFlow: '#orderIceCream'
+    }));
+  },
+  postbackFlows: {
+    "#orderIceCream": [
+      {
+        start: ({value})=>["OrderIceCream", {iceCreamType:value}],
+        then:"Hope you enjoy the {{value}} ice cream!"
+      }
+    ]
+  }
 }
 ```
 
 Notice how we replaced `then` with `thenFlow`.  This is necessary because all flows must be named and known to the compiler at runtime.  It also has the benefit of allowing us to reuse an existing flow.  The `thenFlow` key takes a path to a particular flow.  
+
+At the current time, only postback actions can contain values.  This may change in a future release.
 
 
 ### Ids and Flow Paths

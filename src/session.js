@@ -368,6 +368,7 @@ export default class Session {
    * @param {string} dialog Description
    * @param {string} method The name of the onPostback method provided by the dialog
    * @param {type} text   Description
+   * @param {any} args
    *
    * @return {Object} Suitable for inclusion in the list of actions of a
    *                  carousel or list style message

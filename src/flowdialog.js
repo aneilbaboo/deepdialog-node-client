@@ -405,7 +405,9 @@ export default class FlowDialog extends Dialog {
       switch (actionCopy.type) {
         case 'postback':
           log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
-          this.onPostback(actionFlowKey, thenHandler);
+          this.onPostback(actionFlowKey, async (session, args) => {
+            await thenHandler(makeHandlerVars(session, args), session, path);
+          });
           break;
         case 'reply':
           log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
@@ -496,7 +498,8 @@ export default class FlowDialog extends Dialog {
         case 'postback':
           return session.postbackActionButton(
             this.flowKey(action.thenFlow),
-            action.text
+            action.text,
+            action.value
           );
 
         case 'reply':
