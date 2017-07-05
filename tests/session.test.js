@@ -49,14 +49,6 @@ describe('Session', function () {
       expect(session.frameId).to.equal('frame-id');
     });
 
-    it('should fail if id is missing', function () {
-      expect(()=>{ new Session({app: app, globals:{}, currentFrame:{}}); }).to.throw(Error);
-    });
-
-    it('should fail if id is missing', function () {
-      expect(()=>{ new Session({app: app, globals:{}, currentFrame:{}}); }).to.throw(Error);
-    });
-
     it('should fail if client is not a Client instance', function () {
       expect(()=>{ new Session("not a client inst", {id: '123', globals:{}, currentFrame: {}}); }).to.throw(Error);
     });

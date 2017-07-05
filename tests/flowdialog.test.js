@@ -20,6 +20,8 @@ import FlowDialog, {
   flowIdToText, zipPromisesToHash
 } from '../src/flowdialog';
 
+import Session from '../src/session';
+
 describe('FlowScript', function () {
   var sandbox;
 
@@ -543,7 +545,7 @@ describe('FlowScript', function () {
       });
     });
 
-    context.only('normalizeIterationCommand', function () {
+    context('normalizeIterationCommand', function () {
       it('should expand the minimal form to increment, condition, initializer components', function () {
         var normalForm = normalizeIterationCommand({
           for: ['i', 10, 2],
@@ -1177,8 +1179,8 @@ describe('FlowScript', function () {
               else:()=>{}
             }
           ], ['onStart']);
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_then')).to.be.a.function;
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_else')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.then')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.else')).to.be.a.function;
         });
 
         it('should run the then flow if literal arg to if: is truthy', async function () {
@@ -1195,7 +1197,7 @@ describe('FlowScript', function () {
 
           await handler({a:1},"the-session",[]);
           expect(thenStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if' ,'then']).calledOnce
           ).to.be.true;
           expect(elseStub.notCalled).to.be.true;
         });
@@ -1215,7 +1217,7 @@ describe('FlowScript', function () {
           await handler({a:1},"the-session",[]);
           expect(thenStub.notCalled).to.be.true;
           expect(elseStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if', 'else']).calledOnce
           ).to.be.true;
 
         });
@@ -1239,7 +1241,7 @@ describe('FlowScript', function () {
             sinon.match({a:1}),'the-session',['onStart']).calledOnce
           ).to.be.true;
           expect(thenStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if','then']).calledOnce
           ).to.be.true;
           expect(elseStub.notCalled).to.be.true;
         });
@@ -1263,7 +1265,7 @@ describe('FlowScript', function () {
           ).to.be.true;
           expect(thenStub.notCalled).to.be.true;
           expect(elseStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if', 'else']).calledOnce
           ).to.be.true;
 
         });
@@ -1317,7 +1319,33 @@ describe('FlowScript', function () {
 
       context('iteration command', function () {
         context('using for syntax,', function () {
-          it('should install a ');
+          it('should install a handler which iterates the specified number of times', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              { for: [{i:1}, ({i})=>i<6, {i:2}],
+                do: [
+                  "Hello {{i}}"
+                ]
+              }
+            ], ['onStart']);
+            var events = [];
+            var session = {
+              vars: {},
+              async send(params) { events.push(params); },
+              async save(obj) {
+                this.vars = {...this.vars,...obj};
+              },
+              get globals() { return {}; },
+              get locals() { return this.vars; }
+            };
+
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {type: 'text', text: 'Hello 1'},
+              {type: 'text', text: 'Hello 3'},
+              {type: 'text', text: 'Hello 5'},
+            ]);
+          });
         });
       });
 

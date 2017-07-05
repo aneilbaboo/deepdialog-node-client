@@ -1,4 +1,6 @@
 import {isObject, isString, isArray, isFunction, isUndefined, isNumber} from 'util';
+import assert from 'assert';
+
 import micromustache from 'micromustache';
 
 import {setPath} from './objpath';
@@ -135,30 +137,6 @@ export default class FlowDialog extends Dialog {
   }
 
   /**
-   * _compileFlows - Description
-   *
-   * @param {Object} flows Key is path id, value is a flow
-   * @param {Array} path
-   * @param {Object} options - see _compileFlow
-   *
-   * @return {Object} An object mapping to handler functions
-   */
-  _compileFlows(flows, path, options={}) {
-    log.silly('_compileFlows(%j, %j, %j)', flows, path, options);
-    flows = normalizeFlows(flows);
-    path = path || [];
-    var result = {};
-    for (let id in flows) {
-      var flow = flows[id];
-      var flowPath = appendFlowPathId(path, id);
-      var handler = this._compileFlow(flow, flowPath, options);
-      result[id] = handler;
-    }
-    log.silly('_compileFlows(%j)=>', result);
-    return result;
-  }
-
-  /**
    * _compileFlow - Adds the flow to the dialog, adding handlers as needed
    *
    * @param {Dialog} dialog Description
@@ -212,18 +190,45 @@ export default class FlowDialog extends Dialog {
       });
     }
 
+    var flowKey = this.flowKey(path);
     var handler = async (vars, session) => {
+      log.info('%s started (session:%s)', flowKey, session.id);
       for (let compiledCommand of compiledCommands) {
         await compiledCommand(vars, session, path);
         // session vars may have changed
         // update vars before calling the next command
         vars = makeHandlerVars(session, vars.value);
       }
+      log.info('%s finished (session:%s)', flowKey, session.id);
     };
 
     return this._addFlowHandler(path, handler);
   }
 
+  /**
+   * _compileFlows - Description
+   *
+   * @param {Object} flows Key is path id, value is a flow
+   * @param {Array} path
+   * @param {Object} options - see _compileFlow
+   *
+   * @return {Object} An object mapping to handler functions
+   */
+  _compileFlows(flows, path, options={}) {
+    log.silly('_compileFlows(%j, %j, %j)', flows, path, options);
+    flows = normalizeFlows(flows);
+    path = path || [];
+    var result = {};
+    for (let id in flows) {
+      var flow = flows[id];
+      var flowPath = appendFlowPathId(path, id);
+      var handler = this._compileFlow(flow, flowPath, options);
+      result[id] = handler;
+    }
+    log.silly('_compileFlows(%j)=>', result);
+    return result;
+
+  }
   _compileCommand(cmd, path, options={}) {
     if (isMessageType(cmd.type)) {
       return this._compileMessageCommand(cmd, path, options);
@@ -235,7 +240,7 @@ export default class FlowDialog extends Dialog {
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
-        case 'iteration': return this._compileIterationCommand(cmd);
+        case 'iteration': return this._compileIterationCommand(cmd, path, options);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
@@ -473,8 +478,8 @@ export default class FlowDialog extends Dialog {
     if (!thenFlow && !elseFlow) {
       throw new Error(`Invalid if command %j must contain then or else flow`, cmd);
     }
-    var thenPath = appendFlowPathId(path, `${id}_then`);
-    var elsePath = appendFlowPathId(path, `${id}_else`);
+    var thenPath = appendFlowPathId(path, id, 'then');
+    var elsePath = appendFlowPathId(path, id, 'else');
     var thenHandler = this._compileFlow(thenFlow, thenPath, options);
     var elseHandler = elseFlow ? this._compileFlow(elseFlow, elsePath, options) : null;
     return async (vars, session) => {
@@ -488,39 +493,53 @@ export default class FlowDialog extends Dialog {
   }
 
   _compileIterationCommand(cmd, path, options) {
-    var {id, initializer, condition, increment, do:doFlow} = normalizeIterationCommand(cmd);
+    var {id, initializer, condition, increment, do:doFlow} = cmd; //normalizeIterationCommand(cmd);
     var compiledInitializer = this._compileIterationInitializer(initializer, path);
     var compiledCondition = this._compileIterationCondition(condition, path);
     var compiledIncrement = this._compileIterationIncrement(increment, path);
-    var iterPath = appendFlowPathId(path,id,'do');
-    var compiledDoFlow = this._compileFlow(doFlow, iterPath, options);
+    var doPath = appendFlowPathId(path, id, 'do');
+    var loopPath = appendFlowPathId(path, id, 'loop'); // includes the condition
+    var endPath = appendFlowPathId(path, id, 'end');
 
-    return this._compileFlow([
-      compiledInitializer,
-      {
-        id,
-        if: compiledCondition,
-        then: [
-          compiledDoFlow,
-          compiledIncrement,
-          async (vars, session) => {
-            await this.startFlow(iterPath, session);
-          }
-        ]
-        // TODO: add break pseudo-command - which will start the else flow:
-        //       an empty flow, but which is a named code point:
-        // else: [] // "...path.id.else"
+    // must install the loopFlow so we can compile the doFlow which
+    // references it
+    var compiledLoop = async (vars, session) => {
+      var condition = await compiledCondition(vars, session);
+      if (condition) {
+        await this.startFlow(doPath, session);
+      } else {
+        await this.startFlow(endPath, session);
       }
-    ]);
+    };
+    this._addFlowHandler(loopPath, compiledLoop);
+
+    assert(isArray(doFlow));
+    doFlow.push(compiledIncrement);
+
+    this._compileFlow(doFlow, doPath, {
+      ...options,
+      nextFlow: loopPath,
+      breakFlow: endPath
+    });
+
+    this._compileFlow([], endPath, options); // could eventually put a finally block here
+
+    return async (vars, session) => {
+      await compiledInitializer(vars, session);
+      await this.startFlow(loopPath, session);
+    };
   }
 
-  _compileIterationInitializer(preflow, path) {
-    if (isFunction(preflow)) {
-      return preflow;
-    } else if (preflow) {
+  _compileIterationInitializer(initializer, path) {
+    if (isFunction(initializer)) {
+      return initializer;
+    } else if (isObject(initializer)) {
       return async (vars, session) => {
-        return await this._expandCommandParam(preflow, vars, session, path);
+        let initialVars = await this._expandCommandParam(initializer, vars, session, path);
+        await session.save(initialVars);
       };
+    } else if (!isUndefined(initializer)) {
+      throw new Error(`Invalid initializer in for command: ${initializer}`);
     }
   }
 
@@ -798,6 +817,8 @@ export function normalizeIterationCommand(command) {
       type: 'iteration',
       initializer, condition, increment, do: command.do
     };
+  } else if (command.condition && command.do) {
+    return command;
   }
   throw new Error(`Invalid iteration command: ${JSON.stringify(command)}`);
 }
@@ -1112,7 +1133,8 @@ export function appendFlowPathId(path, ...ids) {
     }
     return (id.startsWith('#')) ? [id] : [...path, id];
   } else {
-    return appendFlowPathId(appendFlowPathId(path, id), ...rest);
+    var result= appendFlowPathId(appendFlowPathId(path, id), ...rest);
+    return result;
   }
 }
 
