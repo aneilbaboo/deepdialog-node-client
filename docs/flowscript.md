@@ -627,9 +627,9 @@ Generate them on the fly:
   async actions (vars, session, path) { // ignore vars and session
     var iceCreamTypes = await db.getIceCreamTypes(); // ['chocolate', ...]
     return iceCreamTypes.map(iceCreamType=>({
+      type: 'postback', // persistent button, takes a value
       text: iceCreamType, // button text
-      type: 'postback', // non-disappearing button
-      value: type, // let the postback flow know which type was selected
+      value: iceCreamType, // let the postback flow know which type was selected
       thenFlow: '#orderIceCream'
     }));
   },
@@ -637,6 +637,7 @@ Generate them on the fly:
     "#orderIceCream": [
       {
         start: ({value})=>["OrderIceCream", {iceCreamType:value}],
+        // when ordering  complete, send a message:
         then:"Hope you enjoy the {{value}} ice cream!"
       }
     ]
