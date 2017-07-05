@@ -65,19 +65,19 @@ describe('FlowScript', function () {
       it('should be false for a simple message command', function () {
         expect(isFlowBreaker({type:'text'})).to.be.false;
       });
-      it('should be true for a message command with actions with then flows', function () {
+      it('should be true for a message command with reply actions', function () {
         expect(isFlowBreaker({
           type:'text',
           actions:[{type:'reply', then:'dothen'}]
         })).to.be.true;
       });
-      it('should be false for a message command with actions with no then flows', function () {
+      it('should be false for a message command with no reply actions', function () {
         expect(isFlowBreaker({
           type:'text',
           actions:[{type:'link', uri:'https://..'}]
         })).to.be.false;
       });
-      it('should be true for a message command with items with actions with then flows', function () {
+      it('should be true for a message command with items with reply actions', function () {
         expect(isFlowBreaker({
           type:'text',
           items: [
@@ -85,13 +85,25 @@ describe('FlowScript', function () {
           ]
         })).to.be.true;
       });
-      it('should be false for a message command with items with actions with no then flows', function () {
+      it('should be false for a message command with items with no reply actions', function () {
         expect(isFlowBreaker({
           type:'text',
           items: [
             { actions:[{type:'link', uri:'https://..'}] }
           ]
         })).to.be.false;
+      });
+      it('should be true for a message command with an items handler', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          items: ()=>{}
+        })).to.be.true;
+      });
+      it('should be true for a message command with items containing an actions handler', function () {
+        expect(isFlowBreaker({
+          type:'text',
+          items: [ { actions: ()=>{} } ]
+        })).to.be.true;
       });
     });
 
@@ -1251,11 +1263,12 @@ describe('FlowScript', function () {
             }]);
           });
 
-          it('should add a next flow handler if a next flow exists', async function () {
+          it('should not add a next flow handler if a next flow exists', async function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-            dialog._compileFlow([
+            var flowHandler = dialog._compileFlow([
               {
                 type: 'text',
+                text: 'the-message',
                 actions: {
                   postback: {
                     type: 'postback',
@@ -1271,13 +1284,29 @@ describe('FlowScript', function () {
 
             var postbackHandler = dialog._getFlowHandler('onStart.postback');
             var events = [];
-            var session = { async send(params) { events.push(params); } };
+            var session = {
+              async send(params) { events.push(params); },
+              postbackActionButton() {
+                return { type: 'payload', text:"postback", payload:"some-hash"};
+              }
+            };
+            await flowHandler({a:1}, session);
             await postbackHandler({a:1},session);
 
             expect(events).to.deep.equal([
-              { type: 'text', text: 'postback action' },
+              {
+                type: 'text', text: 'the-message',
+                actions: [
+                  { type: 'payload', text:"postback",payload:"some-hash"}
+                ]
+              },
               { type: 'text', text: 'this is' },
-              { type: 'text', text: 'the next flow' }
+              { type: 'text', text: 'the next flow' },
+
+              // postback action is a text message that happens
+              // when the user presses the button, but after the nextFlow
+              // completes:
+              { type: 'text', text: 'postback action'}
             ]);
           });
         });
@@ -1313,7 +1342,7 @@ describe('FlowScript', function () {
 
           it('should add a next flow handler if a next flow exists', async function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-            dialog._compileFlow([
+            var flowHandler = dialog._compileFlow([
               {
                 type: 'text',
                 actions: {
@@ -1329,17 +1358,208 @@ describe('FlowScript', function () {
             var replyHandler = dialog._getFlowHandler('onStart.reply');
             var events = [];
             var session = { async send(params) { events.push(params); } };
+            await flowHandler({a:1}, session);
             await replyHandler({a:1},session);
 
             expect(events).to.deep.equal([
+              {
+                type: 'text',
+                actions: [
+                  { type: 'reply', text: 'reply', payload: 'TestFlowDialog:onStart.reply'}
+                ]
+              },
+
+              // user clicks reply
               { type: 'text', text: 'reply action' },
+
+              // only after the user clicks the reply action
+              // does the next flow execute:
               { type: 'text', text: 'this is' },
               { type: 'text', text: 'the next flow' }
             ]);
           });
         });
 
+        context('containing items with postback and reply actions with then flows', function () {
+          it('should not add a flow handler items with a postback', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                items: {
+                  firstItem: {
+                    actions: {
+                      postback: { type: 'postback', then: 'postback action'}
+                    }
+                  }
+                }
+              }
+            ], [
+              'onStart'
+            ]);
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:onStart.firstItem.postback'
+            );
+            expect(dialog.postbackHandlers).to.have.keys(
+              'TestFlowDialog:onStart.firstItem.postback'
+            );
+
+            var postbackHandler = dialog._getFlowHandler('onStart.firstItem.postback');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await postbackHandler({a:1},session);
+
+            expect(events).to.deep.equal([{
+              type: 'text',
+              text: 'postback action'
+            }]);
+          });
+
+          it('should not add a next flow handler when only postback actions are present', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                items: {
+                  firstItem: {
+                    actions: {
+                      postback: { type: 'postback', then: 'postback action'}
+                    }
+                  }
+                }
+              },
+              "this is",
+              "the next flow"
+            ], [
+              'onStart'
+            ]);
+
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:onStart.firstItem.postback'
+            );
+            var postbackHandler = dialog._getFlowHandler('onStart.firstItem.postback');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await postbackHandler({a:1},session);
+
+            expect(events).to.deep.equal([
+              { type: 'text', text: 'postback action' }
+            ]);
+          });
+        });
+
+        context('containing a dynamically generated list of items', function () {
+          it('should add a reply flow handler when reply items are provided', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            dialog._compileFlow([
+              {
+                type: 'text',
+                items: ()=> ([
+                  {
+                    id: 'firstItem',
+                    actions: [
+                      { reply: { type: 'reply', thenFlow: '#flow2'} }
+                    ]
+                  }
+                ]),
+                replyFlows: {
+                  "#flow2":  "Hello from flow2"
+                }
+              },
+              "this is",
+              "the next flow"
+            ], [
+              'onStart'
+            ]);
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:#flow2',
+              'TestFlowDialog:onStart.@subflow(1)' // replyFlows causes flow breaking
+            );
+
+            var replyHandler = dialog._getFlowHandler('TestFlowDialog:#flow2');
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await replyHandler({a:1},session);
+
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([
+              { type: 'text', text: 'Hello from flow2' },
+              { type: 'text', text: 'this is' },
+              { type: 'text', text: 'the next flow' }
+            ]);
+          });
+
+          it("should add a postback flow handler which action's value to the handler", async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var flowHandler = dialog._compileFlow([
+              {
+                type: 'list',
+                items: ()=> [
+                  {
+                    id: 'firstItem',
+                    actions: [{
+                      text: 'buttonText',
+                      type: 'postback',
+                      value: "FOO",
+                      thenFlow: '#flow1'
+                    }]
+                  }
+                ],
+                postbackFlows: {
+                  "#flow1":  "Hello from flow1. Postback value={{value}}"
+                }
+              }
+            ], [
+              'onStart'
+            ]);
+
+            expect(dialog._flowHandlers).to.have.keys(
+              'TestFlowDialog:onStart',
+              'TestFlowDialog:#flow1'
+            );
+            expect(dialog.postbackHandlers).to.have.keys(
+              'TestFlowDialog:#flow1'
+            );
+
+
+            // low-level postback handler:
+            var postbackHandler = dialog.getPostbackHandler('TestFlowDialog:#flow1');
+            var events = [];
+            var postbackActionButtonArgs;
+            var session = {
+              async send(params) { events.push(params); },
+              postbackActionButton(postbackName, text, args) {
+                postbackActionButtonArgs = {postbackName, text, args};
+                return {
+                  text, type:'postback',
+                  payload: { method: postbackName, args }
+                };
+              }
+            };
+
+            // Flow starts
+            await flowHandler({}, session);
+            events = [];  // clear the events - we won't test this
+
+            await postbackHandler(session, "FOO");
+
+            expect(postbackActionButtonArgs).to.deep.equal({
+              postbackName: 'TestFlowDialog:#flow1',
+              text: 'buttonText', // id becomes the name
+              args: 'FOO'
+            });
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([{
+              type: 'text',
+              text: 'Hello from flow1. Postback value=FOO'
+            }]);
+          });
+        });
       });
+
 
       context('when provided a flow with hierarchical actions', function () {
         var dialog;
@@ -1364,7 +1584,7 @@ describe('FlowScript', function () {
                           "Awesome!",
                           {
                             type:'list',
-                            items: {
+                            items: { // these are postbacks - not flow breaking!
                               cookies: {
                                 actions: {
                                   order: "Cookies coming up!"
@@ -1496,9 +1716,8 @@ describe('FlowScript', function () {
                   }
                 ]
               }
-            }
-            // doesn't contain {finish: "Want something else?"}
-            // because previous command is a flow breaker
+            },
+            {finish: "Want something else?"}
           ]);
         });
 
