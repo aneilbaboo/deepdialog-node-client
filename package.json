@@ -23,6 +23,7 @@
   },
   "scripts": {
     "prepublishOnly": ". ./scripts/prepublishOnly.sh",
+    "build": "./node_modules/.bin/babel src --out-dir lib",
     "postinstall": ". ./scripts/postinstall.sh",
     "lint": "eslint ./src",
     "lintfix": "eslint ./src --fix",
