@@ -425,6 +425,11 @@ Run flow conditionally: if/then/else logic
 
 // same as (except for id):
 { if: myPredicate, then: ["Wow!", "It is true"], else: "It is false :(" }
+
+// when and unless syntactic sugar is also supported:
+{ when: condition,  do: [...] }
+
+{ unless: condition, do: [...] }
 ```
 
 ### Set command
@@ -503,7 +508,7 @@ The value can be accessed via handlers or string interpolation.
     ({value})=> {
     // do something with the value returned by MyDialog
     },
-    // save the result into a variable
+    // save the result to the global var X
     { set: {
         X: ({value})=>value
       }
@@ -536,16 +541,23 @@ The finish argument can be a handler:
 
 ### iteration Command
 
-Coming soon.
-
 This command has a number of alternate forms:
 
 #### for iteration
-Sets variables, continues executing the do flow, and updating the
+Loops over one or more variables while a condition is true, incrementing each by a specified value.
+
 ```javascript
-{ id: "firstLoop", // required if >1 iteration exists in a then block -
-                    // defaults to ''
-  for: [{x:1}, ({x})=>x<100, {inc:{x:1}}],
+{
+  id: "optional-flow-id", // optional identifier; defaults to 'for'
+  for: [initializer, condition, increment],
+  do: [...] // flow
+}
+```
+
+Example:
+```javascript
+{
+  for: [{x:1}, ({x})=>x<100, {x:1}],
   do: [ ... ]
 }
 ```
@@ -553,38 +565,43 @@ Sets variables, continues executing the do flow, and updating the
 Continues executing the then flow while the value returned by the while handler is truthy.
 
 ```javascript
-{ id: "...", // optional
-  while: ({condition})=>condition,
-  do: [ ... ] }
+{
+  id: "...", // optional, defaults to 'while'
+  while: condition,
+  do: [ ... ]
+}
 ```
 
-And the converse of `while`, the `until` command:
+And the converse of `while`, `until`:
 ```javascript
-{ id: "...", // optional
-  until: ({condition})=>condition,
-  do: [ ... ] }
+{
+  id: "...", // optional, defaults to 'until'
+  until: condition,
+  do: [ ... ]
+}
 ```
 
 #### forEach Command
 
 Coming soon.
 
-Iterates over a list.  On each iteration, the special variable `value` is bound to each subsequent element of the list.
+Iterates over one or more Arrays until the end of the shortest array is reached.
 
 ```javascript
-{ forEach: [4,3,2,1],
-  do: "{{value}}..." }
+{ forEach: {
+    elt1:[4,3,2,1,0],  // 0 is not reached
+    elt2:['earth', 'below us', 'drifting', 'falling']
+  },
+  do: "{{elt1}}... {{elt2}}" }
   // sends:
-  // 4...
-  // 3...
-  // 2...
-  // 1...
+  // 4... earth
+  // 3... below us
+  // 2... drifting
+  // 1... falling
 
-// alternative form takes a dynamically determined list
-{ forEach({mylist}) { return myList; },
-  then({value}, session) {
-    // do something with each list element
-  }
+// alternative form takes a dynamically generated list
+{ forEach: { post: async ({userId}) => await Blog.getPosts(userId) },
+  then: "You wrote {{post.title}} on {{post.created}}"
 }
 ```
 

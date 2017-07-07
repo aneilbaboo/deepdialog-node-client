@@ -88,52 +88,17 @@ export default class FlowDialog extends Dialog {
     }
   }
 
-  async startFlow(path, session) {
-    await this._getFlowHandler(path)(makeHandlerVars(session), session, path);
-  }
-
   /**
-   * flowKey - converts arrays and strings into fully-resolved flowKeys
-   *               MyDialog.flowKey("a.b.c") => "MyDialog:a.b.c"
-   *               MyDialog.flowKey(['a','b','c']) => "MyDialog:a.b.c"
+   * startFlow - Switches flow of control
    *
-   * @param {Array|string} path
+   * @param {type} path    Description
+   * @param {type} session Description
    *
-   * @return {string} returns a string of the form 'DialogName:x.y.z'
+   * @return {type} Description
    */
-  flowKey(path) {
-    if (isString(path)) {
-      var splitPath = path.split(":");
-      if (splitPath.length==2 && splitPath[0]==this.name && splitPath[1].length>0) { // if it has 2 components...
-        return path;
-      } else if (splitPath.length==1 && path.length>0) {
-        return `${this.name}:${path}`;
-      }
-    } else if (isArray(path) && path.length>0) {
-      var reducedPath = appendFlowPathId([], ...path); // respects #id semantics
-      return `${this.name}:${reducedPath.join(".")}`;
-    }
-    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
-  }
-
-  _getFlowHandler(path) {
-    var fkey = this.flowKey(path);
-    var result = this._flowHandlers[fkey];
-    if (!result) {
-      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
-    }
-    return result;
-  }
-
-  _addFlowHandler(path, handler) {
-    log.silly('_addFlowHandler(%j, function(){...})', path);
-    var fkey = this.flowKey(path);
-    if (this._flowHandlers[fkey]) {
-      throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
-    } else {
-      this._flowHandlers[fkey] = handler;
-    }
-    return handler;
+  async startFlow(path, session) {
+    var handler = this._getFlowHandler(path);
+    await handler(makeHandlerVars(session), session, path);
   }
 
   /**
@@ -154,24 +119,64 @@ export default class FlowDialog extends Dialog {
     flow = normalizeFlow(flow);
     var compiledCommands = [];
     var cmd;
-    var subflowCount = 0;
+    var nextflowCount = 0;
     while (flow.length>0) {
       [cmd, ...flow] = flow;
       if (isFunction(cmd)) {
         compiledCommands.push(cmd);
       } else if (isFlowBreaker(cmd)) {
-        let flowBreakerOptions = {...options};
+        // the next flow should not be executed after the flow breaker,
+        // but should be passed to its subflow
+        //  e.g., for the flow
+        // onStart: [
+        //   { for: [{i:1}, ({i})=>i<3, {i:1}],
+        //     do: [
+        //      { start: "MyDialog", then: "subFlow!" }
+        //      "innerNextFlow!"
+        //     ]
+        //   }
+        //   "outerNextFlow!"
+        // ]
+        // First, these operations happen
+        //   * initialize iteration
+        //   * test the condition,
+        //        if it is true, continue otherwise
+        //        start the outerNextFlow
+        //   * run start command
+        //   * wait for MyDialog to complete (flow is broken)
+        // Then, when MyDialog finishes,
+        //   * run the subflow
+        //   * run the inner nextFlow
+        //   * increment the for loop variables
+        //   * start the for loop flow at test condition
+        //
+        // The code below breaks the a flow into parts - e.g., the do
+        //   flow will be broken into a part containing the start command
+        //   and another flow containing the inner flow.
+        // When the subflow is compiled, it is provided with the nextFlow
+        //   path, and it calls it when it is complete.
+
+        // Do not call anything after a flow breaker!
+        let outerOptions = options;
+        let flowBreakerOptions = {...options, nextFlow: undefined};
+
         // break the rest of the flow into a separate handler, if it exists
         if (flow.length>0) {
-          subflowCount += 1;
-          let nextId = commandId(flow[0], options.strictFlowId) || `@subflow(${subflowCount})`;
-          let nextFlow = appendFlowPathId(path, nextId);
-          this._compileFlow(flow, nextFlow, options);
-          flowBreakerOptions.nextFlow = nextFlow;
+          nextflowCount += 1;
+          let nextId = commandId(flow[0], options.strictFlowId) || `@nextflow(${nextflowCount})`;
+          let nextFlowPath = appendFlowPathId(path, nextId);
+          this._compileFlow(flow, nextFlowPath, outerOptions);
+          flowBreakerOptions = {...options, nextFlow: nextFlowPath };
+        } else {
+          flowBreakerOptions = outerOptions;
         }
         // if the next flow exists, it will be invoked after
         // then/else/do flows are executed:
         compiledCommands.push(this._compileCommand(cmd, path, flowBreakerOptions));
+
+        // the flow breaker terminates this flow, and prevents the nextFlow
+        // from being immediately executed: clear the nextFlow from the options!
+        options = { ...options, nextFlow: undefined};
         break;
       } else {
         compiledCommands.push(this._compileCommand(cmd, path, options));
@@ -189,12 +194,19 @@ export default class FlowDialog extends Dialog {
         await nextFlowHandler(makeHandlerVars(session), session);
       });
     }
-
+    
     var flowKey = this.flowKey(path);
     var handler = async (vars, session) => {
       log.info('%s started (session:%s)', flowKey, session.id);
       for (let compiledCommand of compiledCommands) {
-        await compiledCommand(vars, session, path);
+        try {
+          await compiledCommand(vars, session, path);
+        } catch (e) {
+          if (e.break) {
+            await this.startFlow(options.breakFlow, session);
+            break;
+          }
+        }
         // session vars may have changed
         // update vars before calling the next command
         vars = makeHandlerVars(session, vars.value);
@@ -241,6 +253,7 @@ export default class FlowDialog extends Dialog {
         case 'set': return this._compileSetCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
+        case 'break': return this._compileIterationBreak(cmd, path, options);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
@@ -587,19 +600,30 @@ export default class FlowDialog extends Dialog {
     };
   }
 
+  _compileIterationBreak(cmd, path, options) {
+    var breakFlow = options.breakFlow;
+    var breakError = new Error(`Invalid break encountered at ${this.flowKey(path)}`);
+    breakError.break = true;
+    if (!breakFlow) {
+      throw breakError;
+    }
+
+    return function () { throw breakError; };
+  }
+
   _compileStartCommand(cmd, path, options) {
     log.silly('_compileStartCommand(%j,%j,%j)',cmd,path,options);
     var {start, then} = cmd;
-    var dialogName, args;
-    var startParamFn;
+    var dialogName;
     var thenPath = appendFlowPathId(path, cmd.id, 'then');
+    var compiledStartParam;
 
     if (isFunction(start)) {
       dialogName = anyPattern;
-      startParamFn = start;
+      compiledStartParam = start;
     } else {
-      [dialogName, args] = normalizeStartParam(start);
-      startParamFn = ()=>[dialogName, args];
+      [dialogName] = normalizeStartParam(start);
+      compiledStartParam = start;
     }
 
     // require result handler if there is a nextFlow
@@ -616,7 +640,8 @@ export default class FlowDialog extends Dialog {
     }
 
     return async (vars, session) => {
-      var [dialogName, args] = normalizeStartParam(await startParamFn(vars, session, thenPath));
+      var startParam = await this._expandCommandParam(compiledStartParam, vars, session, thenPath);
+      var [dialogName, args] = normalizeStartParam(startParam);
       await session.start(dialogName, args, tag);
     };
   }
@@ -694,7 +719,61 @@ export default class FlowDialog extends Dialog {
       )
     ));
   }
+
+  //
+  // Flow handler access
+  //
+
+  /**
+   * flowKey - converts arrays and strings into fully-resolved flowKeys
+   *               MyDialog.flowKey("a.b.c") => "MyDialog:a.b.c"
+   *               MyDialog.flowKey(['a','b','c']) => "MyDialog:a.b.c"
+   *
+   * @param {Array|string} path
+   *
+   * @return {string} returns a string of the form 'DialogName:x.y.z'
+   */
+  flowKey(path) {
+    if (isString(path)) {
+      var splitPath = path.split(":");
+      if (splitPath.length==2 && splitPath[0]==this.name && splitPath[1].length>0) { // if it has 2 components...
+        return path;
+      } else if (splitPath.length==1 && path.length>0) {
+        return `${this.name}:${path}`;
+      }
+    } else if (isArray(path) && path.length>0) {
+      var reducedPath = appendFlowPathId([], ...path); // respects #id semantics
+      return `${this.name}:${reducedPath.join(".")}`;
+    }
+    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
+  }
+
+  _getFlowHandler(path) {
+    var fkey = this.flowKey(path);
+    var result = this._flowHandlers[fkey];
+    if (!result) {
+      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
+    }
+    return result;
+  }
+
+  _addFlowHandler(path, handler) {
+    log.silly('_addFlowHandler(%j, function(){...})', path);
+    var fkey = this.flowKey(path);
+    if (this._flowHandlers[fkey]) {
+      throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
+    } else {
+      this._flowHandlers[fkey] = handler;
+    }
+    return handler;
+  }
 }
+
+//
+//
+// Utility functions
+//
+//
 
 // const _fnRegex = /(\w+)\([\w,]*\)/;
 
@@ -1016,6 +1095,7 @@ export function isFlowBreaker(cmd) {
       cmd.type=='conditional' ||
       cmd.type=='iteration' ||
       cmd.type=='start' ||
+      cmd.type=='break' ||
       (
         isMessageType(cmd.type) && (
           actionsHasFlowBreakers(cmd.actions) ||
@@ -1096,6 +1176,8 @@ export function inferCommandType(command) {
     command.hasOwnProperty('until')
   ) {
     return 'iteration';
+  } else if (command.break) {
+    return 'break';
   }
 }
 
