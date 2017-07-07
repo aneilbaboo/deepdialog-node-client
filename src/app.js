@@ -261,7 +261,7 @@ export default class App {
 
   sessionFromNotificationData(data) {
     var currentFrame = data.matchedFrame || data.session.stack[0];
-    return new Session({
+    var session = new Session({
       app: this,
       accessToken: data.accessToken,
       id: data.session.id,
@@ -272,6 +272,8 @@ export default class App {
       surname: data.session.surname,
       currentFrame: currentFrame
     });
+    session.validate();
+    return session;
   }
 
   async getSessions(params) {

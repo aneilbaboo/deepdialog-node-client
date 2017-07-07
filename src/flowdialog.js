@@ -1,4 +1,6 @@
-import {isObject, isString, isArray, isFunction} from 'util';
+import {isObject, isString, isArray, isFunction, isUndefined, isNumber} from 'util';
+import assert from 'assert';
+
 import micromustache from 'micromustache';
 
 import {setPath} from './objpath';
@@ -86,52 +88,133 @@ export default class FlowDialog extends Dialog {
     }
   }
 
+  /**
+   * startFlow - Switches flow of control
+   *
+   * @param {type} path    Description
+   * @param {type} session Description
+   *
+   * @return {type} Description
+   */
   async startFlow(path, session) {
-    await this._getFlowHandler(path)(makeHandlerVars(session), session, path);
+    var handler = this._getFlowHandler(path);
+    await handler(makeHandlerVars(session), session, path);
   }
 
   /**
-   * flowKey - converts arrays and strings into fully-resolved flowKeys
-   *               MyDialog.flowKey("a.b.c") => "MyDialog:a.b.c"
-   *               MyDialog.flowKey(['a','b','c']) => "MyDialog:a.b.c"
+   * _compileFlow - Adds the flow to the dialog, adding handlers as needed
    *
-   * @param {Array|string} path
+   * @param {Dialog} dialog Description
+   * @param {Object|Array|Function|string} flow   Description
+   * @param {Array} path   Description
+   * @param {Object} options - see _compileFlow
+   * @param {Array} options.nextFlow used by the system to indicate the flow
+   *                    that will be started after a flow breaker command
+   *                    completes (see isFlowBreaker)
    *
-   * @return {string} returns a string of the form 'DialogName:x.y.z'
+   * @return {Function} returns a handler
    */
-  flowKey(path) {
-    if (isString(path)) {
-      var splitPath = path.split(":");
-      if (splitPath.length==2 && splitPath[0]==this.name && splitPath[1].length>0) { // if it has 2 components...
-        return path;
-      } else if (splitPath.length==1 && path.length>0) {
-        return `${this.name}:${path}`;
+  _compileFlow(flow, path, options={}) {
+    log.silly('_compileFlow(%j,%j,%j)', flow, path, options);
+    flow = normalizeFlow(flow);
+    var compiledCommands = [];
+    var cmd;
+    var nextflowCount = 0;
+    while (flow.length>0) {
+      [cmd, ...flow] = flow;
+      if (isFunction(cmd)) {
+        compiledCommands.push(cmd);
+      } else if (isFlowBreaker(cmd)) {
+        // the next flow should not be executed after the flow breaker,
+        // but should be passed to its subflow
+        //  e.g., for the flow
+        // onStart: [
+        //   { for: [{i:1}, ({i})=>i<3, {i:1}],
+        //     do: [
+        //      { start: "MyDialog", then: "subFlow!" }
+        //      "innerNextFlow!"
+        //     ]
+        //   }
+        //   "outerNextFlow!"
+        // ]
+        // First, these operations happen
+        //   * initialize iteration
+        //   * test the condition,
+        //        if it is true, continue otherwise
+        //        start the outerNextFlow
+        //   * run start command
+        //   * wait for MyDialog to complete (flow is broken)
+        // Then, when MyDialog finishes,
+        //   * run the subflow
+        //   * run the inner nextFlow
+        //   * increment the for loop variables
+        //   * start the for loop flow at test condition
+        //
+        // The code below breaks the a flow into parts - e.g., the do
+        //   flow will be broken into a part containing the start command
+        //   and another flow containing the inner flow.
+        // When the subflow is compiled, it is provided with the nextFlow
+        //   path, and it calls it when it is complete.
+
+        // Do not call anything after a flow breaker!
+        let outerOptions = options;
+        let flowBreakerOptions = {...options, nextFlow: undefined};
+
+        // break the rest of the flow into a separate handler, if it exists
+        if (flow.length>0) {
+          nextflowCount += 1;
+          let nextId = commandId(flow[0], options.strictFlowId) || `@nextflow(${nextflowCount})`;
+          let nextFlowPath = appendFlowPathId(path, nextId);
+          this._compileFlow(flow, nextFlowPath, outerOptions);
+          flowBreakerOptions = {...options, nextFlow: nextFlowPath };
+        } else {
+          flowBreakerOptions = outerOptions;
+        }
+        // if the next flow exists, it will be invoked after
+        // then/else/do flows are executed:
+        compiledCommands.push(this._compileCommand(cmd, path, flowBreakerOptions));
+
+        // the flow breaker terminates this flow, and prevents the nextFlow
+        // from being immediately executed: clear the nextFlow from the options!
+        options = { ...options, nextFlow: undefined};
+        break;
+      } else {
+        compiledCommands.push(this._compileCommand(cmd, path, options));
       }
-    } else if (isArray(path) && path.length>0) {
-      var reducedPath = appendFlowPathId([], ...path); // respects #id semantics
-      return `${this.name}:${reducedPath.join(".")}`;
     }
-    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
-  }
 
-  _getFlowHandler(path) {
-    var fkey = this.flowKey(path);
-    var result = this._flowHandlers[fkey];
-    if (!result) {
-      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
+    // if there is a nextFlow option then ensure that this is executed last
+    if (options.nextFlow) {
+      let nextFlowHandler = this._getFlowHandler(options.nextFlow);
+      compiledCommands.push(async (vars, session) => {
+        // note: if `value` was defined in the flow where the flow breaker
+        // command started, it is undefined after the flow breaker
+        // TODO: preserve `value` inside the next flow(s)
+        //  see https://github.com/aneilbaboo/deepdialog-node-client/issues/10
+        await nextFlowHandler(makeHandlerVars(session), session);
+      });
     }
-    return result;
-  }
+    
+    var flowKey = this.flowKey(path);
+    var handler = async (vars, session) => {
+      log.info('%s started (session:%s)', flowKey, session.id);
+      for (let compiledCommand of compiledCommands) {
+        try {
+          await compiledCommand(vars, session, path);
+        } catch (e) {
+          if (e.break) {
+            await this.startFlow(options.breakFlow, session);
+            break;
+          }
+        }
+        // session vars may have changed
+        // update vars before calling the next command
+        vars = makeHandlerVars(session, vars.value);
+      }
+      log.info('%s finished (session:%s)', flowKey, session.id);
+    };
 
-  _addFlowHandler(path, handler) {
-    log.silly('_addFlowHandler(%j, function(){...})', path);
-    var fkey = this.flowKey(path);
-    if (this._flowHandlers[fkey]) {
-      throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
-    } else {
-      this._flowHandlers[fkey] = handler;
-    }
-    return handler;
+    return this._addFlowHandler(path, handler);
   }
 
   /**
@@ -156,74 +239,8 @@ export default class FlowDialog extends Dialog {
     }
     log.silly('_compileFlows(%j)=>', result);
     return result;
+
   }
-
-  /**
-   * _compileFlow - Adds the flow to the dialog, adding handlers as needed
-   *
-   * @param {Dialog} dialog Description
-   * @param {Object|Array|Function|string} flow   Description
-   * @param {Array} path   Description
-   * @param {Object} options - see _compileFlow
-   * @param {Array} options.nextFlow used by the system to indicate the flow
-   *                    that will be started after a flow breaker command
-   *                    completes (see isFlowBreaker)
-   *
-   * @return {Function} returns a handler
-   */
-  _compileFlow(flow, path, options={}) {
-    log.silly('_compileFlow(%j,%j,%j)', flow, path, options);
-    flow = normalizeFlow(flow);
-    var compiledCommands = [];
-    var cmd;
-    var subflowCount = 0;
-    while (flow.length>0) {
-      [cmd, ...flow] = flow;
-      if (isFunction(cmd)) {
-        compiledCommands.push(cmd);
-      } else if (isFlowBreaker(cmd)) {
-        let flowBreakerOptions = {...options};
-        // break the rest of the flow into a separate handler, if it exists
-        if (flow.length>0) {
-          subflowCount += 1;
-          let nextId = commandId(flow[0], options.strictFlowId) || `@subflow(${subflowCount})`;
-          let nextFlow = appendFlowPathId(path, nextId);
-          this._compileFlow(flow, nextFlow, options);
-          flowBreakerOptions.nextFlow = nextFlow;
-        }
-        // if the next flow exists, it will be invoked after
-        // then/else/do flows are executed:
-        compiledCommands.push(this._compileCommand(cmd, path, flowBreakerOptions));
-        break;
-      } else {
-        compiledCommands.push(this._compileCommand(cmd, path, options));
-      }
-    }
-
-    // if there is a nextFlow option then ensure that this is executed last
-    if (options.nextFlow) {
-      let nextFlowHandler = this._getFlowHandler(options.nextFlow);
-      compiledCommands.push(async (vars, session) => {
-        // note: if `value` was defined in the flow where the flow breaker
-        // command started, it is undefined after the flow breaker
-        // TODO: preserve `value` inside the next flow(s)
-        //  see https://github.com/aneilbaboo/deepdialog-node-client/issues/10
-        await nextFlowHandler(makeHandlerVars(session), session);
-      });
-    }
-
-    var handler = async (vars, session) => {
-      for (let compiledCommand of compiledCommands) {
-        await compiledCommand(vars, session, path);
-        // session vars may have changed
-        // update vars before calling the next command
-        vars = makeHandlerVars(session, vars.value);
-      }
-    };
-
-    return this._addFlowHandler(path, handler);
-  }
-
   _compileCommand(cmd, path, options={}) {
     if (isMessageType(cmd.type)) {
       return this._compileMessageCommand(cmd, path, options);
@@ -235,7 +252,8 @@ export default class FlowDialog extends Dialog {
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
-        //case 'iteration': return this._compileIterationCommand(cmd);
+        case 'iteration': return this._compileIterationCommand(cmd, path, options);
+        case 'break': return this._compileIterationBreak(cmd, path, options);
         default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
       }
     }
@@ -473,8 +491,8 @@ export default class FlowDialog extends Dialog {
     if (!thenFlow && !elseFlow) {
       throw new Error(`Invalid if command %j must contain then or else flow`, cmd);
     }
-    var thenPath = appendFlowPathId(path, `${id}_then`);
-    var elsePath = appendFlowPathId(path, `${id}_else`);
+    var thenPath = appendFlowPathId(path, id, 'then');
+    var elsePath = appendFlowPathId(path, id, 'else');
     var thenHandler = this._compileFlow(thenFlow, thenPath, options);
     var elseHandler = elseFlow ? this._compileFlow(elseFlow, elsePath, options) : null;
     return async (vars, session) => {
@@ -487,6 +505,94 @@ export default class FlowDialog extends Dialog {
     };
   }
 
+  _compileIterationCommand(cmd, path, options) {
+    var {id, initializer, condition, increment, do:doFlow} = cmd; //normalizeIterationCommand(cmd);
+    var compiledInitializer = this._compileIterationInitializer(initializer, path);
+    var compiledCondition = this._compileIterationCondition(condition, path);
+    var compiledIncrement = this._compileIterationIncrement(increment, path);
+    var doPath = appendFlowPathId(path, id, 'do');
+    var loopPath = appendFlowPathId(path, id, 'loop'); // includes the condition
+    var endPath = appendFlowPathId(path, id, 'end');
+
+    // must install the loopFlow so we can compile the doFlow which
+    // references it
+    var compiledLoop = async (vars, session) => {
+      var condition = await compiledCondition(vars, session);
+      if (condition) {
+        await this.startFlow(doPath, session);
+      } else {
+        await this.startFlow(endPath, session);
+      }
+    };
+    this._addFlowHandler(loopPath, compiledLoop);
+
+    assert(isArray(doFlow));
+    doFlow.push(compiledIncrement);
+
+    this._compileFlow(doFlow, doPath, {
+      ...options,
+      nextFlow: loopPath,
+      breakFlow: endPath
+    });
+
+    this._compileFlow([], endPath, options); // could eventually put a finally block here
+
+    return async (vars, session) => {
+      await compiledInitializer(vars, session);
+      await this.startFlow(loopPath, session);
+    };
+  }
+
+  _compileIterationInitializer(initializer, path) {
+    if (isFunction(initializer)) {
+      return initializer;
+    } else if (isObject(initializer)) {
+      return async (vars, session) => {
+        let initialVars = await this._expandCommandParam(initializer, vars, session, path);
+        await session.save(initialVars);
+      };
+    } else if (!isUndefined(initializer)) {
+      throw new Error(`Invalid initializer in for command: ${initializer}`);
+    }
+  }
+
+  _compileIterationCondition(condition, path) {
+    if (isFunction(condition)) {
+      return condition;
+    } else if (isObject(condition)) {
+      return async (vars, session) => {
+        var expandedCondition = await this._expandCommandParam(condition, vars, session, path);
+        for (let varName in condition) {
+          if (vars[varName]>=expandedCondition[varName]) {
+            return false;
+          }
+        }
+        return true;
+      };
+    }
+    throw new Error(`Invalid iteration condition. Expecting a function or `+
+      `object, but received: ${condition}`
+    );
+  }
+
+  _compileIterationIncrement(increment, path) {
+    if (isFunction(increment)) {
+      return increment;
+    } else if (isObject(increment)) {
+      return async (vars, session) => {
+        var expandedIncrement = await this._expandCommandParam(increment, vars, session, path);
+        var iterVars = {};
+        for (let varName in expandedIncrement) {
+          iterVars[varName]=vars[varName]+expandedIncrement[varName];
+        }
+        await session.save(iterVars);
+      };
+    }
+    throw new Error(`Invalid iteration condition. Expecting a function or `+
+      `object, but received: ${increment}`
+    );
+  }
+
   _compileFinishCommand(cmd, path) {
     return async (vars, session) => {
       var result = await this._expandCommandParam(cmd.finish, vars, session, path);
@@ -494,19 +600,30 @@ export default class FlowDialog extends Dialog {
     };
   }
 
+  _compileIterationBreak(cmd, path, options) {
+    var breakFlow = options.breakFlow;
+    var breakError = new Error(`Invalid break encountered at ${this.flowKey(path)}`);
+    breakError.break = true;
+    if (!breakFlow) {
+      throw breakError;
+    }
+
+    return function () { throw breakError; };
+  }
+
   _compileStartCommand(cmd, path, options) {
     log.silly('_compileStartCommand(%j,%j,%j)',cmd,path,options);
     var {start, then} = cmd;
-    var dialogName, args;
-    var startParamFn;
+    var dialogName;
     var thenPath = appendFlowPathId(path, cmd.id, 'then');
+    var compiledStartParam;
 
     if (isFunction(start)) {
       dialogName = anyPattern;
-      startParamFn = start;
+      compiledStartParam = start;
     } else {
-      [dialogName, args] = normalizeStartParam(start);
-      startParamFn = ()=>[dialogName, args];
+      [dialogName] = normalizeStartParam(start);
+      compiledStartParam = start;
     }
 
     // require result handler if there is a nextFlow
@@ -523,7 +640,8 @@ export default class FlowDialog extends Dialog {
     }
 
     return async (vars, session) => {
-      var [dialogName, args] = normalizeStartParam(await startParamFn(vars, session, thenPath));
+      var startParam = await this._expandCommandParam(compiledStartParam, vars, session, thenPath);
+      var [dialogName, args] = normalizeStartParam(startParam);
       await session.start(dialogName, args, tag);
     };
   }
@@ -602,23 +720,60 @@ export default class FlowDialog extends Dialog {
     ));
   }
 
-  // _makeTemplateResolver() {
-  //   var handlers = this._resolvers;
-  //   return function(varName) {
-  //     let resolverMatch = _fnRegex.exec(varName);
-  //     if (resolverMatch) {
-  //       let [handlerName, argsList] = handlerMatch.slice(1,2);
-  //       let args = argsList.split(',').map(s=>s.trim()).filter(s=>s=='');
-  //       let handler = handlers[handlerName];
-  //       if (handler) {
-  //         return handler(...args);
-  //       }
-  //     } else {
-  //       throw "Use default resolver";
-  //     }
-  //   };
-  // }
+  //
+  // Flow handler access
+  //
+
+  /**
+   * flowKey - converts arrays and strings into fully-resolved flowKeys
+   *               MyDialog.flowKey("a.b.c") => "MyDialog:a.b.c"
+   *               MyDialog.flowKey(['a','b','c']) => "MyDialog:a.b.c"
+   *
+   * @param {Array|string} path
+   *
+   * @return {string} returns a string of the form 'DialogName:x.y.z'
+   */
+  flowKey(path) {
+    if (isString(path)) {
+      var splitPath = path.split(":");
+      if (splitPath.length==2 && splitPath[0]==this.name && splitPath[1].length>0) { // if it has 2 components...
+        return path;
+      } else if (splitPath.length==1 && path.length>0) {
+        return `${this.name}:${path}`;
+      }
+    } else if (isArray(path) && path.length>0) {
+      var reducedPath = appendFlowPathId([], ...path); // respects #id semantics
+      return `${this.name}:${reducedPath.join(".")}`;
+    }
+    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
+  }
+
+  _getFlowHandler(path) {
+    var fkey = this.flowKey(path);
+    var result = this._flowHandlers[fkey];
+    if (!result) {
+      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
+    }
+    return result;
+  }
+
+  _addFlowHandler(path, handler) {
+    log.silly('_addFlowHandler(%j, function(){...})', path);
+    var fkey = this.flowKey(path);
+    if (this._flowHandlers[fkey]) {
+      throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
+    } else {
+      this._flowHandlers[fkey] = handler;
+    }
+    return handler;
+  }
 }
+
+//
+//
+// Utility functions
+//
+//
 
 // const _fnRegex = /(\w+)\([\w,]*\)/;
 
@@ -677,6 +832,8 @@ export function normalizeFlowCommand(command) {
           return normalizeStartCommand(command);
         case 'exec':
           return normalizeExecCommand(command);
+        case 'iteration':
+          return normalizeIterationCommand(command);
         default:
           return command;
       }
@@ -704,8 +861,82 @@ export function normalizeSetCommand(command) {
 
 export function normalizeConditionalCommand(command) {
   log.silly('normalizeConditionalCommand(%j)', command);
-  var id = command.id || 'if';
-  return {id, ...command};
+  if (command.hasOwnProperty('if')) {
+    return {id: command.id || 'if', ...command};
+  } else if (command.hasOwnProperty('when')) {
+    return {id: command.id || 'when', then: command.do};
+  } else if (command.hasOwnProperty('unless')) {
+    return {id: command.id || 'unless', then: [], else: command.do };
+  }
+}
+
+export function normalizeIterationCommand(command) {
+  log.silly('normalizeIterationCommand(%j)', command);
+
+  if (command.while) {
+    return {
+      id: command.id || 'while',
+      type: 'iteration',
+      condition: command.while,
+      do: command.do
+    };
+  } else if (command.until) {
+    return {
+      id: command.id || 'until',
+      type: 'iteration',
+      condition: async (vars, session)=>!(await command.until(vars, session)),
+      do: command.do
+    };
+  } else if (command.for) {
+    let initializer = normalizeIterationInitializer(command.for[0]);
+    let condition = normalizeIterationCondition(initializer, command.for[1]);
+    let increment = normalizeIterationIncrement(initializer, command.for[2]);
+    return {
+      id: command.id || 'for',
+      type: 'iteration',
+      initializer, condition, increment, do: command.do
+    };
+  } else if (command.condition && command.do) {
+    return command;
+  }
+  throw new Error(`Invalid iteration command: ${JSON.stringify(command)}`);
+}
+
+export function normalizeIterationInitializer(initializer) {
+  if (isString(initializer)) {
+    return {[initializer]:0};
+  } else if (isFunction(initializer) || isObject(initializer)) {
+    return initializer;
+  } else if (isUndefined(initializer)) {
+    return;
+  }
+  throw new Error(`Invalid initializer in iteration command: ${initializer}`);
+}
+
+export function normalizeIterationCondition(initializer, condition) {
+  if (isNumber(condition) && isObject(initializer)) {
+    let iterVars = Object.keys(initializer);
+    return (vars)=>iterVars.every(iv=>vars[iv]<condition);
+  } else if (isObject(condition)) {
+    let iterVars = Object.keys(condition);
+    return (vars)=>iterVars.every(iv=>vars[iv]<condition);
+  } else if (isFunction(condition)) {
+    return condition;
+  }
+  throw new Error(`Invalid condition in iteration command: ${initializer}`);
+}
+
+export function normalizeIterationIncrement(initializer, increment) {
+  if (isNumber(increment) && isObject(initializer)) {
+    let result = {};
+    for (let varName in initializer) {
+      result[varName] = increment;
+    }
+    return result;
+  } else if (isObject(increment) || isFunction(increment)) {
+    return increment;
+  }
+  throw new Error(`Invalid condition in iteration command: ${initializer}`);
 }
 
 export function normalizeStartCommand(command) {
@@ -864,6 +1095,7 @@ export function isFlowBreaker(cmd) {
       cmd.type=='conditional' ||
       cmd.type=='iteration' ||
       cmd.type=='start' ||
+      cmd.type=='break' ||
       (
         isMessageType(cmd.type) && (
           actionsHasFlowBreakers(cmd.actions) ||
@@ -930,10 +1162,22 @@ export function inferCommandType(command) {
     return 'wait';
   } else if (command.set) {
     return 'set';
-  } else if (command.hasOwnProperty('if')) {
+  } else if (
+    command.hasOwnProperty('if') ||
+    command.hasOwnProperty('when') ||
+    command.hasOwnProperty('unless')
+  ) { // could be null
     return 'conditional';
   } else if (command.exec) {
     return 'exec';
+  } else if (
+    command.for ||
+    command.hasOwnProperty('while') ||
+    command.hasOwnProperty('until')
+  ) {
+    return 'iteration';
+  } else if (command.break) {
+    return 'break';
   }
 }
 
@@ -971,7 +1215,8 @@ export function appendFlowPathId(path, ...ids) {
     }
     return (id.startsWith('#')) ? [id] : [...path, id];
   } else {
-    return appendFlowPathId(appendFlowPathId(path, id), ...rest);
+    var result= appendFlowPathId(appendFlowPathId(path, id), ...rest);
+    return result;
   }
 }
 

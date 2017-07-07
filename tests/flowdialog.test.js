@@ -1,6 +1,11 @@
-import {expect} from 'chai';
+import {isFunction} from 'util';
+
 import sinon from 'sinon';
-var util = require('../src/util'); // need to stub the module
+import chai, {expect} from 'chai';
+import chaiMatchPattern from 'chai-match-pattern';
+chai.use(chaiMatchPattern);
+
+var util = require('../src/util'); // need to require so we can stub the module
 
 import {anyPattern} from '../src/constants';
 import FlowDialog, {
@@ -9,6 +14,7 @@ import FlowDialog, {
   isExecCommand, isFlowBreaker,
   inferCommandType, inferActionType,
   normalizeFlow, normalizeAction, normalizeExecCommand,
+  normalizeIterationCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
   flowIdToText, zipPromisesToHash
@@ -49,6 +55,12 @@ describe('FlowScript', function () {
       });
       it('should be "conditional" if "if" key is present', function () {
         expect(inferCommandType({if:()=>{}})).to.equal("conditional");
+      });
+      it('should be "conditional" if "when" key is present', function () {
+        expect(inferCommandType({when:()=>{}})).to.equal("conditional");
+      });
+      it('should be "conditional" if "unless" key is present', function () {
+        expect(inferCommandType({unless:()=>{}})).to.equal("conditional");
       });
     });
 
@@ -119,7 +131,6 @@ describe('FlowScript', function () {
       it("should be true for objects which contain a handler key", function () {
         expect(isExecCommand({handler:'hello'})).to.be.false;
       });
-
     });
 
     context('isCommandType', function () {
@@ -529,6 +540,80 @@ describe('FlowScript', function () {
         expect(normalizeFlow({text:'hello'})).to.deep.equal([
           {type:'text', text:'hello'}
         ]);
+      });
+    });
+
+    context('normalizeIterationCommand', function () {
+      it('should expand the minimal form to increment, condition, initializer components', function () {
+        var normalForm = normalizeIterationCommand({
+          for: ['i', 10, 2],
+          do: "hello {{i}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'for',
+          type: 'iteration',
+          initializer: {i:0},
+          condition: isFunction,
+          increment: {i:2},
+          do: "hello {{i}}"
+        });
+        expect(normalForm.condition({i:0})).to.be.true;
+        expect(normalForm.condition({i:9})).to.be.true;
+        expect(normalForm.condition({i:10})).to.be.false;
+        expect(normalForm.condition({i:100})).to.be.false;
+      });
+
+      it('should leave the normal form as is', function () {
+        var normalForm = normalizeIterationCommand({
+          for: [{i:1}, 10, {i:5}],
+          do: "hello {{i}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'for',
+          type: 'iteration',
+          initializer: {i:1},
+          condition: isFunction,
+          increment: {i:5},
+          do: "hello {{i}}"
+        });
+      });
+
+      it('should correctly transform a while expression', function () {
+        var normalForm = normalizeIterationCommand({
+          while: ({x})=>!x, // flip the boolean
+          do: "hello {{x}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'while',
+          type: 'iteration',
+          condition: isFunction,
+          do: "hello {{x}}"
+        });
+        expect(normalForm.initializer).to.not.be.defined;
+        expect(normalForm.increment).to.not.be.defined;
+
+        // the condition flips the boolean in var x
+        expect(normalForm.condition({x:true})).to.be.false;
+        expect(normalForm.condition({x:false})).to.be.ok;
+      });
+
+      it('should correctly transform an until expression', async function () {
+        var normalForm = normalizeIterationCommand({
+          until: ({x})=>!x, // flip the boolean
+          do: "hello {{x}}"
+        });
+        expect(normalForm).to.matchPattern({
+          id: 'until',
+          type: 'iteration',
+          condition: isFunction,
+          do: "hello {{x}}"
+        });
+        expect(normalForm.initializer).to.not.be.defined;
+        expect(normalForm.increment).to.not.be.defined;
+
+        // until should flip the boolean twice
+        expect(await normalForm.condition({x:true})).to.be.ok;
+        expect(await normalForm.condition({x:false})).to.be.false;
       });
     });
   });
@@ -962,19 +1047,21 @@ describe('FlowScript', function () {
                     await session.push({vars, path});
                   }
                 }
-              ], [
-                'a','b'
               ],
+              // path
+              [ 'a','b' ],
+              // options:
               { nextFlow: ['the-next-flow'] });
             });
 
             it('the dialog should install a result handler that invokes the nextFlow', async function () {
-              var resultHandler = dialog._getFlowHandler('TestFlowDialog:a.b.user-custom-id.then');
-
-              await resultHandler({a:1, value:'the-value'}, session, []);
+              expect(dialog.resultHandlers).to.have.key('_|TestFlowDialog:a.b.user-custom-id.then');
+              var resultHandler = dialog.getResultHandler('_|TestFlowDialog:a.b.user-custom-id.then');
+              session.locals = {a:1};
+              await resultHandler(session, 'the-result');
               expect(events).to.deep.equal([
-                {push: {vars: {a:1, value:'the-value'}, path:['a','b','user-custom-id', 'then']}},
-                {push: {vars: {}, nextFlow:true}}  // vars constructed from session
+                {push: {vars: {a:1, value:'the-result'}, path:['a','b','user-custom-id', 'then']}},
+                {push: {vars: {a:1}, nextFlow:true}}  // vars constructed from session
               ]);
             });
           });
@@ -1092,8 +1179,8 @@ describe('FlowScript', function () {
               else:()=>{}
             }
           ], ['onStart']);
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_then')).to.be.a.function;
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if_else')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.then')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.else')).to.be.a.function;
         });
 
         it('should run the then flow if literal arg to if: is truthy', async function () {
@@ -1110,7 +1197,7 @@ describe('FlowScript', function () {
 
           await handler({a:1},"the-session",[]);
           expect(thenStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if' ,'then']).calledOnce
           ).to.be.true;
           expect(elseStub.notCalled).to.be.true;
         });
@@ -1130,7 +1217,7 @@ describe('FlowScript', function () {
           await handler({a:1},"the-session",[]);
           expect(thenStub.notCalled).to.be.true;
           expect(elseStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if', 'else']).calledOnce
           ).to.be.true;
 
         });
@@ -1154,7 +1241,7 @@ describe('FlowScript', function () {
             sinon.match({a:1}),'the-session',['onStart']).calledOnce
           ).to.be.true;
           expect(thenStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_then']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if','then']).calledOnce
           ).to.be.true;
           expect(elseStub.notCalled).to.be.true;
         });
@@ -1178,7 +1265,7 @@ describe('FlowScript', function () {
           ).to.be.true;
           expect(thenStub.notCalled).to.be.true;
           expect(elseStub.withArgs(
-            sinon.match({a:1}),'the-session',['onStart', 'if_else']).calledOnce
+            sinon.match({a:1}),'the-session',['onStart', 'if', 'else']).calledOnce
           ).to.be.true;
 
         });
@@ -1227,6 +1314,142 @@ describe('FlowScript', function () {
             { type: 'text', text: 'then' },
             { type: 'text', text: 'next' }
           ]);
+        });
+      });
+
+      context('iteration command', function () {
+        context('using for syntax,', function () {
+          it('should install a handler which iterates the specified number of times', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              { for: [{i:1}, ({i})=>i<6, {i:2}],
+                do: [
+                  "Hello {{i}}"
+                ]
+              }
+            ], ['onStart']);
+            var events = [];
+            var session = {
+              vars: {},
+              async send(params) { events.push(params); },
+              async save(obj) {
+                this.vars = {...this.vars,...obj};
+              },
+              get globals() { return {}; },
+              get locals() { return this.vars; }
+            };
+
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {type: 'text', text: 'Hello 1'},
+              {type: 'text', text: 'Hello 3'},
+              {type: 'text', text: 'Hello 5'},
+            ]);
+          });
+
+          it('should stop iterating when it encounters a break command', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              { for: [{i:1}, ({i})=>i<6, {i:2}],
+                do: [
+                  "Hello {{i}}",
+                  {break:true}
+                ]
+              },
+              "Done!"
+            ], ['onStart']);
+            var events = [];
+            var session = {
+              vars: {},
+              async send(params) { events.push(params); },
+              async save(obj) {
+                this.vars = {...this.vars,...obj};
+              },
+              get globals() { return {}; },
+              get locals() { return this.vars; }
+            };
+
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {type: 'text', text: 'Hello 1'},
+              {type: 'text', text: 'Done!'}
+            ]);
+
+            // increment not executed:
+            expect(session.vars).to.deep.equal({i:1});
+          });
+
+          context('when it contains a dialog start (i.e., flow breaking) command', function () {
+            var dialog, events, session, onStartHandler;
+            beforeEach(function () {
+              dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+              onStartHandler = dialog._compileFlow([
+                {
+                  for: [{i:1}, ({i})=>i<6, {i:2}],
+                  do: [
+                    {
+                      start: ["ChildDialog", ({i})=>({a:i*10})],
+                      then: "start.then: iter={{i}} result={{value}}"
+                    },
+                    "nextFlow: iter={{i}}"
+                  ]
+                },
+                "outer nextFlow"
+              ], ['onStart']);
+              events = [];
+              session = {
+                vars: {},
+                async start(dialog, args) {
+                  events.push({start:{dialog, args}});
+                },
+                async send(params) {
+                  events.push({send:params}); },
+                async save(obj) {
+                  this.vars = {...this.vars,...obj};
+                },
+                get globals() { return {}; },
+                get locals() { return this.vars; }
+              };
+            });
+
+            it('should call the flow breaking command after calling the initializer', async function () {
+              await onStartHandler({}, session);
+              expect(session.vars).to.deep.equal({i:1});
+              expect(events).to.deep.equal([
+                {start:{dialog:"ChildDialog", args:{a:10}}}
+              ]);
+            });
+
+            context("when the dialog returns a result, it should execute the subflow " +
+            "(the start.then flow), then execute the nextFlow, then increment "+
+            "the counter ", function () {
+              it('and if the condition is still met, should start the do flow again', async function () {
+                var resultHandler = dialog.getResultHandler('ChildDialog|TestFlowDialog:onStart.for.do.start(ChildDialog).then');
+                session.vars = {i:1};
+                await resultHandler(session, "the-result");
+                expect(events).to.deep.equal([
+                  { send: { type:'text', text:'start.then: iter=1 result=the-result'}},
+                  { send: { type:'text', text:'nextFlow: iter=1'}},
+                  // i + increment 2 = 3 ;  a = i*10
+                  { start: { dialog: 'ChildDialog', args: { a:30 }}}
+                ]);
+              });
+
+              it('and if the condition is NOT met, should exit the loop and execute '+
+              'the outer next', async function () {
+                var resultHandler = dialog.getResultHandler('ChildDialog', 'TestFlowDialog:onStart.for.do.start(ChildDialog).then');
+                session.vars = {i:5};
+                await resultHandler(session, "the-result");
+                expect(events).to.deep.equal([
+                  { send: { type:'text', text:'start.then: iter=5 result=the-result'}},
+                  { send: { type:'text', text:'nextFlow: iter=5'}},
+                  // i + increment 2 = 7; condition 7<6 fails
+                  // child dialog is not called / outer next flow executes
+                  { send: { type: 'text', text:'outer nextFlow' }}
+                ]);
+              });
+            });
+          });
         });
       });
 
@@ -1476,7 +1699,7 @@ describe('FlowScript', function () {
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
               'TestFlowDialog:#flow2',
-              'TestFlowDialog:onStart.@subflow(1)' // replyFlows causes flow breaking
+              'TestFlowDialog:onStart.@nextflow(1)' // replyFlows causes flow breaking
             );
 
             var replyHandler = dialog._getFlowHandler('TestFlowDialog:#flow2');
