@@ -29,7 +29,7 @@
     "lintfix": "eslint ./src --fix",
     "testonly": "mocha $npm_package_options_mocha",
     "test": "npm run lint && npm run testonly",
-    "console": "node --require babel-register --require babel-polyfill -e 'var {App, Session, AppServer, Client, Dialog, log} = require(`.`);' -i"
+    "console": "node --require babel-register --require babel-polyfill -e 'var {App, Session, AppServer, Client, Dialog, log, FlowDialog, $} = require(`./src`);' -i"
   },
   "directories": {
     "lib": ""

@@ -194,7 +194,7 @@ export default class FlowDialog extends Dialog {
         await nextFlowHandler(makeHandlerVars(session), session);
       });
     }
-    
+
     var flowKey = this.flowKey(path);
     var handler = async (vars, session) => {
       log.info('%s started (session:%s)', flowKey, session.id);
@@ -1252,3 +1252,13 @@ export async function zipPromisesToHash(keys, promises) {
   keys.forEach((key, idx) => result[key] = values[idx]);
   return result;
 }
+
+// Variable access sugar: $.myVar instead of ({myVar})=>myVar
+// E.g.,
+// { if: $.myVar, then: [ ... ] }
+// instead of
+// { if: ({myVar})=>myVar, then: [ ... ] }
+//
+export const $ = new Proxy({}, {
+  get: (target, property)=> (vars)=>vars[property]
+});

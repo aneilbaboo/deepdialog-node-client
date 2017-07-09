@@ -17,7 +17,7 @@ import FlowDialog, {
   normalizeIterationCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
-  flowIdToText, zipPromisesToHash
+  flowIdToText, zipPromisesToHash, $
 } from '../src/flowdialog';
 
 describe('FlowScript', function () {
@@ -1945,6 +1945,14 @@ describe('FlowScript', function () {
         });
 
       });
+    });
+  });
+
+  describe('FlowDialog helpers', function () {
+    it('$.varName should return a handler which extracts the value of varName', function () {
+      expect($.varName).to.be.a.function;
+      expect($.varName({varName:1})).to.equal(1);
+      expect($.varName({})).to.be.undefined;
     });
   });
 });
