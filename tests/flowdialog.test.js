@@ -1949,10 +1949,33 @@ describe('FlowScript', function () {
   });
 
   describe('FlowDialog helpers', function () {
-    it('$.varName should return a handler which extracts the value of varName', function () {
-      expect($.varName).to.be.a.function;
-      expect($.varName({varName:1})).to.equal(1);
-      expect($.varName({})).to.be.undefined;
+    context('$ operator', function () {
+      it('should return a handler which extracts the value of the property from the vars', function () {
+        expect($.myVar).to.be.a.function;
+        expect($.myVar({myVar:1})).to.equal(1);
+        expect($.myVar({})).to.be.undefined;
+      });
+
+      it('should return a handler which extracts properties recursively', function () {
+        expect($.a.b.c.d).to.be.a.function;
+        var vars = {a:{b:{c:{d:123}}}};
+        expect($.a.b.c.d(vars)).to.equal(123);
+        expect($.a.b(vars)).to.deep.equal({c:{d:123}});
+      });
+
+      it('should return a handler which attempts to call a method if the property starts with $', function () {
+        expect($.a.$toLowerCase()).to.be.a.function;
+        expect($.a.$toLowerCase()({a:"HELLO"})).to.equal("hello");
+        expect($.a.b.$toLowerCase()({a:{b:"HELLO"}})).to.equal("hello");
+      });
+
+      it("should return a handler which returns undefined if the deep proeprty doesn't exist", function () {
+        expect($.a.b.c.d({a:1})).to.be.undefined;
+      });
+
+      it("should return a handler which returns undefined if a function doesn't exist", function () {
+        expect($.a.$toLowerCase()({a:1})).to.be.undefined;
+      });
     });
   });
 });
