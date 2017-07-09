@@ -1259,6 +1259,37 @@ export async function zipPromisesToHash(keys, promises) {
 // instead of
 // { if: ({myVar})=>myVar, then: [ ... ] }
 //
-export const $ = new Proxy({}, {
-  get: (target, property)=> (vars)=>vars[property]
-});
+export const $ = handlerPropertyProxy(vars=>vars);
+
+function handlerPropertyProxy(handler) {
+  return new Proxy(handler, {
+    get (target, property) {
+      if (
+        target.hasOwnProperty(property) ||
+        !isString(property) ||
+        property=='call' ||
+        property=='inspect'
+      ) {
+        return target[property];
+      } else if (property.startsWith('$')) {
+        // it's a function call
+        // e.g., $.a.b.$toLowerCase()
+        let trueFnName = property.slice(1);
+        return function (...args) {
+          return handlerPropertyProxy(function (vars) {
+            var value = target(vars);
+            if (
+              value &&
+              isFunction(value[trueFnName])
+            ) {
+              return value[trueFnName](...args);
+            }
+          });
+        };
+      } else {
+        var nextTarget = vars=>(target(vars) || {})[property];
+        return handlerPropertyProxy(nextTarget);
+      }
+    }
+  });
+}
