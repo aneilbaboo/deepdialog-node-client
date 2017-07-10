@@ -170,6 +170,24 @@ Where,
 `session` - the session object if you need low-level access to it.
 `path` - an array containing the ids identifying the current element.  
 
+#### Dollar operator
+
+Access and transform session variables quickly using this syntactic sugar for value handlers.
+
+```javascript
+$.a // a short hand for ({a})=>a
+
+// access class methods using $
+// E.g., if a is a string,
+$.a.$toLowerCase() // equivalent to ({a})=>a.toLowerCase()
+
+// a handful of extra $methods are provided
+$.a.$gt($.b) // sugar for ({a,b})=>a>b
+$.a.$gte($.b) // sugar for ({a,b})=>a>=b
+// also: $lt, $lte, $equal, $add, $sub, $mul, $div, $pow
+
+```
+
 See also the [Advanced Topics](#advanced-topics) section.
 
 ### Named Handlers
@@ -461,7 +479,8 @@ Set session variables
 { set: {"user.home.address": "420 Paper St."}}
 
 // destructuring functionality can be useful
-//   find vars are sequences of word chars between {}, split on ","
+//   find vars are sequences of word chars between {}
+//      split on "," and trim spaces
 function myHandler() { return {a:1, b:2, c:3, d:4}; }
 ...
 { set: {"{ a, c}": myHandler}} // sets the keys a and c
@@ -528,7 +547,9 @@ The value can be accessed via handlers or string interpolation.
     },
     // save the result to the global var X
     { set: {
-        X: ({value})=>value
+        X: ({value})=>value,
+        // alternatively,
+        Y: $.value // see the $ operator
       }
     },
     // use the result in a message:
@@ -625,7 +646,7 @@ Iterates over one or more Arrays until the end of the shortest array is reached.
 
 ## Advanced Topics
 
-#### Where Flows Appear
+### Where Flows Appear
 
 Flows can be provided in the following places:
 1. keys of the `flows` Object in the FlowDialog constructor
