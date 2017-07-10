@@ -1319,6 +1319,62 @@ describe('FlowScript', function () {
             { type: 'text', text: 'next' }
           ]);
         });
+
+        it('should run the do flow if when condition is true', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var doStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { when:()=>true,
+              do:doStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(doStub.calledOnce).to.be.ok;
+        });
+
+        it('should not run the do flow if when condition is false', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var doStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { when:()=>false,
+              do:doStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(doStub.notCalled).to.be.ok;
+        });
+
+        it('should run the do flow if unless condition is false', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var doStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { unless:()=>false,
+              do:doStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(doStub.called).to.be.ok;
+        });
+
+        it('should not run the do flow if unless condition is true', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var doStub = sinon.stub();
+
+          var handler = dialog._compileFlow([
+            { unless:()=>true,
+              do:doStub
+            }
+          ], ['onStart']);
+
+          await handler({a:1},"the-session",[]);
+          expect(doStub.notCalled).to.be.ok;
+        });
       });
 
       context('iteration command', function () {

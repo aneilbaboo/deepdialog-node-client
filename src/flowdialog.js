@@ -1,4 +1,5 @@
-import {isObject, isString, isArray, isFunction, isUndefined, isNumber} from 'util';
+import {isString, isArray, isFunction, isUndefined, isNumber} from 'util';
+import {isPlainObject} from 'lodash';
 import assert from 'assert';
 
 import micromustache from 'micromustache';
@@ -117,6 +118,7 @@ export default class FlowDialog extends Dialog {
   _compileFlow(flow, path, options={}) {
     log.silly('_compileFlow(%j,%j,%j)', flow, path, options);
     flow = normalizeFlow(flow);
+
     var compiledCommands = [];
     var cmd;
     var nextflowCount = 0;
@@ -254,7 +256,7 @@ export default class FlowDialog extends Dialog {
         case 'exec': return this._compileExecCommand(cmd, path, options);
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
-        default: throw new Error(`Failed while compiling unrecognized command: ${cmd}`);
+        default: throw new Error(`Failed while compiling unrecognized command: ${JSON.stringify(cmd)} at ${this.flowKey(path)}`);
       }
     }
   }
@@ -546,7 +548,7 @@ export default class FlowDialog extends Dialog {
   _compileIterationInitializer(initializer, path) {
     if (isFunction(initializer)) {
       return initializer;
-    } else if (isObject(initializer)) {
+    } else if (isPlainObject(initializer)) {
       return async (vars, session) => {
         let initialVars = await this._expandCommandParam(initializer, vars, session, path);
         await session.save(initialVars);
@@ -559,7 +561,7 @@ export default class FlowDialog extends Dialog {
   _compileIterationCondition(condition, path) {
     if (isFunction(condition)) {
       return condition;
-    } else if (isObject(condition)) {
+    } else if (isPlainObject(condition)) {
       return async (vars, session) => {
         var expandedCondition = await this._expandCommandParam(condition, vars, session, path);
         for (let varName in condition) {
@@ -578,7 +580,7 @@ export default class FlowDialog extends Dialog {
   _compileIterationIncrement(increment, path) {
     if (isFunction(increment)) {
       return increment;
-    } else if (isObject(increment)) {
+    } else if (isPlainObject(increment)) {
       return async (vars, session) => {
         var expandedIncrement = await this._expandCommandParam(increment, vars, session, path);
         var iterVars = {};
@@ -697,7 +699,7 @@ export default class FlowDialog extends Dialog {
       return await param(vars, session, path);
     } else if (isArray(param)) {
       return await Promise.all(param.map(elt=>this._expandCommandParam(elt, vars, session, path)));
-    } else if (isObject(param)) {
+    } else if (isPlainObject(param)) {
       if (isExecCommand(param)) {
         let handler = this._compileExecCommand(param, path);
         return await handler(vars, session);
@@ -786,7 +788,7 @@ export default class FlowDialog extends Dialog {
 
 export function normalizeFlows(flows) {
   log.silly('normalizeFlows(',flows,')');
-  if (isObject(flows)) {
+  if (isPlainObject(flows)) {
     var normFlows = {};
     for (var id in flows) {
       normFlows[id] = normalizeFlow(flows[id]);
@@ -813,7 +815,7 @@ export function normalizeFlowCommand(command) {
     return command;
   } else if (isString(command)) {
     return {type:'text', text:command};
-  } else if (isObject(command)) {
+  } else if (isPlainObject(command)) {
     var type = command.type || inferCommandType(command);
 
     if (type) {
@@ -864,9 +866,20 @@ export function normalizeConditionalCommand(command) {
   if (command.hasOwnProperty('if')) {
     return {id: command.id || 'if', ...command};
   } else if (command.hasOwnProperty('when')) {
-    return {id: command.id || 'when', then: command.do};
+    return {
+      id: command.id || 'when',
+      type: 'conditional',
+      if: command.when,
+      then: command.do
+    };
   } else if (command.hasOwnProperty('unless')) {
-    return {id: command.id || 'unless', then: [], else: command.do };
+    return {
+      id: command.id || 'unless',
+      type: 'conditional',
+      if: command.unless,
+      then: [],
+      else: command.do
+    };
   }
 }
 
@@ -878,23 +891,44 @@ export function normalizeIterationCommand(command) {
       id: command.id || 'while',
       type: 'iteration',
       condition: command.while,
-      do: command.do
+      do: command.do,
+      finally: command.finally,
     };
   } else if (command.until) {
+    var negatedCondition = negateCondition(command.until);
     return {
       id: command.id || 'until',
       type: 'iteration',
-      condition: async (vars, session)=>!(await command.until(vars, session)),
-      do: command.do
+      condition: negatedCondition,
+      do: command.do,
+      finally: command.finally,
     };
-  } else if (command.for) {
+  }
+  // else if (command.forEach) {
+  //   var initializer = command.forEach;
+  //   if (!isPlainObject(initializer)) {
+  //     throw new Error(`Expecting a plain Object argument to forEach in ${JSON.stringify(command)}`);
+  //   }
+  //   return {
+  //     id: command.id || 'forEach',
+  //     type: 'iteration',
+  //     initializer: initializer,
+  //     condition: normalizeForEachCondition(initializer),
+  //     increment: normalizeForEachIncrement(initializer),
+  //     do: command.do,
+  //     finally: command.finally ? [forEachFinally, command.finally] : forEachFinally
+  //   };
+  // }
+  else if (command.for) {
     let initializer = normalizeIterationInitializer(command.for[0]);
     let condition = normalizeIterationCondition(initializer, command.for[1]);
     let increment = normalizeIterationIncrement(initializer, command.for[2]);
     return {
       id: command.id || 'for',
       type: 'iteration',
-      initializer, condition, increment, do: command.do
+      initializer, condition, increment,
+      do: command.do,
+      finally: command.finally
     };
   } else if (command.condition && command.do) {
     return command;
@@ -902,10 +936,18 @@ export function normalizeIterationCommand(command) {
   throw new Error(`Invalid iteration command: ${JSON.stringify(command)}`);
 }
 
+export function negateCondition(condition) {
+  if (isFunction(condition)) {
+    return async (vars, session) => !(await condition(vars, session));
+  } else {
+    return !condition;
+  }
+}
+
 export function normalizeIterationInitializer(initializer) {
   if (isString(initializer)) {
     return {[initializer]:0};
-  } else if (isFunction(initializer) || isObject(initializer)) {
+  } else if (isFunction(initializer) || isPlainObject(initializer)) {
     return initializer;
   } else if (isUndefined(initializer)) {
     return;
@@ -914,10 +956,10 @@ export function normalizeIterationInitializer(initializer) {
 }
 
 export function normalizeIterationCondition(initializer, condition) {
-  if (isNumber(condition) && isObject(initializer)) {
+  if (isNumber(condition) && isPlainObject(initializer)) {
     let iterVars = Object.keys(initializer);
     return (vars)=>iterVars.every(iv=>vars[iv]<condition);
-  } else if (isObject(condition)) {
+  } else if (isPlainObject(condition)) {
     let iterVars = Object.keys(condition);
     return (vars)=>iterVars.every(iv=>vars[iv]<condition);
   } else if (isFunction(condition)) {
@@ -927,13 +969,13 @@ export function normalizeIterationCondition(initializer, condition) {
 }
 
 export function normalizeIterationIncrement(initializer, increment) {
-  if (isNumber(increment) && isObject(initializer)) {
+  if (isNumber(increment) && isPlainObject(initializer)) {
     let result = {};
     for (let varName in initializer) {
       result[varName] = increment;
     }
     return result;
-  } else if (isObject(increment) || isFunction(increment)) {
+  } else if (isPlainObject(increment) || isFunction(increment)) {
     return increment;
   }
   throw new Error(`Invalid condition in iteration command: ${initializer}`);
@@ -966,7 +1008,7 @@ export function normalizeItems(items) {
       ...item,
       actions: normalizeActions(item.actions, 'postback')
     }));
-  } else if (isObject(items)) {
+  } else if (isPlainObject(items)) {
     var normalizedItems = [];
     for (let k in items) {
       var item = items[k];
@@ -995,7 +1037,7 @@ export function normalizeActions(actions, defaultType) {
   log.silly('normalizeActions(%j,%j)', actions, defaultType);
   if (isArray(actions)) {
     return actions.map(action=>normalizeAction(action.id, action, defaultType));
-  } else if (isObject(actions)) {
+  } else if (isPlainObject(actions)) {
     var normalizedActions = [];
     for (let k in actions) {
       var action = normalizeAction(k, actions[k], defaultType);
@@ -1056,7 +1098,7 @@ export function isFlow(obj) {
 
 export function isFlowCommand(obj) {
   return isString(obj) || isFunction(obj) || (
-    isObject(obj) && isCommandType(obj.type || inferCommandType(obj))
+    isPlainObject(obj) && isCommandType(obj.type || inferCommandType(obj))
   );
 }
 
@@ -1064,7 +1106,7 @@ export function commandId(cmd, strict) {
   var id;
   if (isFunction(cmd)) {
     id = cmd.name;
-  } else if (isObject(cmd)) {
+  } else if (isPlainObject(cmd)) {
     id = cmd.id;
   }
   if (!id && strict) {
@@ -1090,7 +1132,7 @@ export function commandId(cmd, strict) {
  */
 export function isFlowBreaker(cmd) {
   return !!(
-    (!isArray(cmd) && isObject(cmd)) &&
+    (!isArray(cmd) && isPlainObject(cmd)) &&
     (
       cmd.type=='conditional' ||
       cmd.type=='iteration' ||
@@ -1117,11 +1159,11 @@ export function actionsHasFlowBreakers(actions) {
 }
 
 export function isExecCommand(obj) {
-  return isObject(obj) && (isString(obj.exec) || isArray(obj.exec));
+  return isPlainObject(obj) && (isString(obj.exec) || isArray(obj.exec));
 }
 
 export function isAction(obj) {
-  return !!(isObject(obj) && isActionType(obj.type || inferActionType(obj,'reply')));
+  return !!(isPlainObject(obj) && isActionType(obj.type || inferActionType(obj,'reply')));
 }
 
 export function isActionable(obj) {
@@ -1239,8 +1281,6 @@ export function flowPathFromKey(flowKey) {
 /**
  * zipPromisesToHash - Takes an array of keys and promises,
  *                        resolves the promises and assigns the values
- *
- *
  *
  * @param {type} keys     Description
  * @param {type} promises Description
