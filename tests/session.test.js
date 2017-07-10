@@ -62,6 +62,7 @@ describe('Session', function () {
       session = new Session({app: app,
         id: 'session-id',
         globals: { Global: 1},
+        volatiles: { vol: 'volatile-value'},
         currentFrame: {
           dialog: 'theDialog',
           tag: 'theTag',
@@ -70,12 +71,21 @@ describe('Session', function () {
       });
     });
 
+    it('should get a volatile var', function () {
+      expect(session.get('vol')).to.equal('volatile-value');
+    });
+
     it('should get a local var', function () {
       expect(session.get('local')).to.equal(2);
     });
 
     it('should get a global var', function() {
       expect(session.get('Global')).to.equal(1);
+    });
+
+    it('should be able to setv a volatile variable', function () {
+      session.setv('volatile2', 'vol3');
+      expect(session.get('volatile2')).to.equal('vol3');
     });
 
     it('should set a single lowercase var as a local', function () {

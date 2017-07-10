@@ -1248,9 +1248,9 @@ export function inferCommandType(command) {
 
 export function makeHandlerVars(session, value) {
   if (value!=undefined) {
-    return {...session.globals, ...session.locals, value};
+    return {...session.globals, ...session.locals, ...session.volatiles, value};
   } else {
-    return {...session.globals, ...session.locals };
+    return {...session.globals, ...session.locals, ...session.volatiles };
   }
 }
 

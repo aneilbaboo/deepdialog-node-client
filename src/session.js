@@ -6,15 +6,16 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor({app, id, globals, username, email, displayName, givenName, surname, accessToken, currentFrame}) {
+  constructor({app, id, globals, username, email, displayName, givenName, surname, accessToken, currentFrame, volatiles}) {
     this._app = app;
     this._updateValues({
       id, globals, currentFrame,
       username, displayName, email, givenName, surname,
-      accessToken:accessToken || app.appSecret});
+      accessToken:accessToken || app.appSecret,
+      volatiles});
   }
 
-  _updateValues({id, globals, accessToken, currentFrame, username, email, displayName, givenName, surname}) {
+  _updateValues({id, globals, accessToken, currentFrame, username, email, displayName, givenName, surname, volatiles}) {
     var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
@@ -27,6 +28,7 @@ export default class Session {
     this._surname = surname;
     this._email = email;
     this._globals = globals || {};
+    this._volatiles = volatiles || {};
     if (dialogApp) {
       this._dialogAppId = dialogApp.id;
       this._dialogAppName = dialogApp.name;
@@ -49,6 +51,7 @@ export default class Session {
   get client() { return this._client; }
   get id() { return this._id; }
   get globals() { return this._globals; }
+  get volatiles() { return this._volatiles; }
   get frameId() { return this._frameId; }
   get locals() { return this._locals; }
   get dialogName() { return this._dialogName; }
@@ -71,7 +74,9 @@ export default class Session {
    * @return {Object}
    */
   get(key) {
-    return (this.locals.hasOwnProperty(key)) ? this.locals[key] : this.globals[key];
+    return this.volatiles.hasOwnProperty(key) ? this.volatiles[key] : (
+      this.locals.hasOwnProperty(key) ?
+      this.locals[key] : this.globals[key]);
   }
 
   /**
@@ -95,6 +100,17 @@ export default class Session {
       } else {
         this.locals[variableOrHash] = value;
       }
+    }
+  }
+
+  // sets volatile variables - which do not persist between requests
+  setv(variableOrHash, value) {
+    if (variableOrHash instanceof Object) {
+      for (let k in variableOrHash) {
+        this.setv(k, variableOrHash[k]);
+      }
+    } else {
+      this.volatiles[variableOrHash] = value;
     }
   }
 
