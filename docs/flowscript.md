@@ -461,6 +461,18 @@ Set session variables
 { set: {"user.home.address": "420 Paper St."}}
 ```
 
+Variables set using this command are persisted to the backend.  Each session frame can store slightly under 4K of data, and bloating your session variables will negatively impact performance, as all the values are loaded for each request, even if those values are not used.  If you need to persist a large object, save it elsewhere and only store a token in the session.  You can use volatile variables (see the (setv command)[#setv-command]) to temporarily store a large object in the session.
+
+### SetV Command
+
+Sets volatile variables.
+
+```javascript
+{ setv: { myvolatile: 'value' } }
+```
+
+Unlike regular variables which are saved to the DeepDialog back end, volatile variables persist only for the duration of a request.  This is useful when you want to store a large data structure without incurring the overhead of regular variables, which are loaded for each session.  
+
 ### Start command
 
 Starts a new dialog.
