@@ -472,7 +472,9 @@ export default class FlowDialog extends Dialog {
           break;
         case 'reply':
           log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
-          this.onPayload(actionFlowKey, thenHandler);
+          this.onPayload(actionFlowKey, async (session) => {
+            await thenHandler(makeHandlerVars(session), session, path);
+          });
           break;
         default:
           throw new Error(`Invalid action: then and thenFlow may only be used with `+
@@ -495,8 +497,8 @@ export default class FlowDialog extends Dialog {
     }
     var thenPath = appendFlowPathId(path, id, 'then');
     var elsePath = appendFlowPathId(path, id, 'else');
-    var thenHandler = this._compileFlow(thenFlow, thenPath, options);
-    var elseHandler = elseFlow ? this._compileFlow(elseFlow, elsePath, options) : null;
+    var thenHandler = this._compileFlow(thenFlow || [], thenPath, options);
+    var elseHandler = this._compileFlow(elseFlow || [], elsePath, options);
     return async (vars, session) => {
       var testResult = await this._expandCommandParam(test, vars, session, path);
       if (testResult) {
