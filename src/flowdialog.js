@@ -1096,6 +1096,7 @@ export function isFlowBreaker(cmd) {
       cmd.type=='iteration' ||
       cmd.type=='start' ||
       cmd.type=='break' ||
+      cmd.type=='finish' ||
       (
         isMessageType(cmd.type) && (
           actionsHasFlowBreakers(cmd.actions) ||
@@ -1154,7 +1155,7 @@ export function inferCommandType(command) {
     return 'image'; // this must come before command.text inference
   } else if (command.text) {
     return 'text';
-  } else if (command.finish) {
+  } else if (command.hasOwnProperty('finish')) { // value could be null or false
     return 'finish';
   } else if (command.start) {
     return 'start';
