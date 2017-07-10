@@ -1612,10 +1612,10 @@ describe('FlowScript', function () {
               'TestFlowDialog:onStart.reply'
             );
 
-            var replyHandler = dialog._getFlowHandler('onStart.reply');
+            var [payloadHandler] = dialog.getInputHandler({payload:'TestFlowDialog:onStart.reply'});
             var events = [];
             var session = { async send(params) { events.push(params); } };
-            await replyHandler({a:1},session);
+            await payloadHandler(session);
 
             expect(events).to.deep.equal([{
               type: 'text',
