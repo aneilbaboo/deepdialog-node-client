@@ -459,6 +459,12 @@ Set session variables
 // child objects are created automatically
 // existing keys in parent objects are retained:
 { set: {"user.home.address": "420 Paper St."}}
+
+// destructuring functionality can be useful
+//   find vars are sequences of word chars between {}, split on ","
+function myHandler() { return {a:1, b:2, c:3, d:4}; }
+...
+{ set: {"{ a, c}": myHandler}} // sets the keys a and c
 ```
 
 Variables set using this command are persisted to the backend.  Each session frame can store slightly under 4K of data, and bloating your session variables will negatively impact performance, as all the values are loaded for each request, even if those values are not used.  If you need to persist a large object, save it elsewhere and only store a token in the session.  You can use volatile variables (see the (setv command)[#setv-command]) to temporarily store a large object in the session.
