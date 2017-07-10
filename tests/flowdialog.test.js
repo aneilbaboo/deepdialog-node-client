@@ -8,6 +8,7 @@ chai.use(chaiMatchPattern);
 var util = require('../src/util'); // need to require so we can stub the module
 
 import {anyPattern} from '../src/constants';
+import Session from '../src/session';
 import FlowDialog, {
   isFlow, isFlowCommand, isAction, isActionable,
   isCommandType, isActionType, isMessageType,
@@ -17,7 +18,8 @@ import FlowDialog, {
   normalizeIterationCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
-  flowIdToText, zipPromisesToHash, $
+  flowIdToText, zipPromisesToHash,
+  $, makeHandlerVars
 } from '../src/flowdialog';
 
 describe('FlowScript', function () {
@@ -2009,6 +2011,18 @@ describe('FlowScript', function () {
   });
 
   describe('FlowDialog helpers', function () {
+    context('makeHandlerVars', function () {
+      it('should store globals, locals and volatiles', function () {
+        var session = new Session({app:{}, globals:{A:1}, currentFrame: {locals:{b:2}}, volatiles:{c:3}});
+        expect(makeHandlerVars(session)).to.deep.equal({A:1, b:2, c:3});
+      });
+      it('should provide a value key if second arg is defined', function () {
+        var session = new Session({app:{}, globals:{A:1}, currentFrame:{locals:{b:2}}, volatiles:{c:3}});
+        expect(makeHandlerVars(session, 'the-value')).to.deep.equal({A:1, b:2, c:3, value: 'the-value'});
+        expect(makeHandlerVars(session, undefined)).to.deep.equal({A:1, b:2, c:3});
+      });
+    });
+
     context('$ operator', function () {
       it('should return a handler which extracts the value of the property from the vars', function () {
         expect($.myVar).to.be.a.function;
