@@ -122,10 +122,27 @@ export default class FlowDialog extends Dialog {
     var compiledCommands = [];
     var cmd;
     var nextflowCount = 0;
+    var commandCount = 0;
+    var addCompiledCommand = function (compiledCommand) {
+      if (commandCount==0) {
+        compiledCommands.push(async (vars, session)=>{
+          log.debug('%s begin (session:%s)', flowKey, session.id);
+          await compiledCommand(vars, session, path);
+        });
+      } else {
+        compiledCommands.push(compiledCommand);
+      }
+
+      if (commandCount==(flow.length-1)) {
+        compiledCommands.push((vars, session)=>log.debug('%s end (session:%s)', flowKey, session.id));
+      }
+      commandCount += 1;
+    };
+
     while (flow.length>0) {
       [cmd, ...flow] = flow;
       if (isFunction(cmd)) {
-        compiledCommands.push(cmd);
+        addCompiledCommand(cmd);
       } else if (isFlowBreaker(cmd)) {
         // the next flow should not be executed after the flow breaker,
         // but should be passed to its subflow
@@ -174,21 +191,21 @@ export default class FlowDialog extends Dialog {
         }
         // if the next flow exists, it will be invoked after
         // then/else/do flows are executed:
-        compiledCommands.push(this._compileCommand(cmd, path, flowBreakerOptions));
+        addCompiledCommand(this._compileCommand(cmd, path, flowBreakerOptions));
 
         // the flow breaker terminates this flow, and prevents the nextFlow
         // from being immediately executed: clear the nextFlow from the options!
         options = { ...options, nextFlow: undefined};
         break;
       } else {
-        compiledCommands.push(this._compileCommand(cmd, path, options));
+        addCompiledCommand(this._compileCommand(cmd, path, options));
       }
     }
 
     // if there is a nextFlow option then ensure that this is executed last
     if (options.nextFlow) {
       let nextFlowHandler = this._getFlowHandler(options.nextFlow);
-      compiledCommands.push(async (vars, session) => {
+      addCompiledCommand(async (vars, session) => {
         // note: if `value` was defined in the flow where the flow breaker
         // command started, it is undefined after the flow breaker
         // TODO: preserve `value` inside the next flow(s)
@@ -199,7 +216,6 @@ export default class FlowDialog extends Dialog {
 
     var flowKey = this.flowKey(path);
     var handler = async (vars, session) => {
-      log.info('%s started (session:%s)', flowKey, session.id);
       for (let compiledCommand of compiledCommands) {
         try {
           await compiledCommand(vars, session, path);
@@ -213,7 +229,6 @@ export default class FlowDialog extends Dialog {
         // update vars before calling the next command
         vars = makeHandlerVars(session, vars.value);
       }
-      log.info('%s finished (session:%s)', flowKey, session.id);
     };
 
     return this._addFlowHandler(path, handler);
