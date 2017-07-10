@@ -50,6 +50,10 @@ describe('FlowScript', function () {
       it('should be "finish" if "finish" key is present', function () {
         expect(inferCommandType({finish:true})).to.equal('finish');
       });
+      it('should be "finish" if "finish" key is present even if value is falsey', function () {
+        expect(inferCommandType({finish:false})).to.equal('finish');
+        expect(inferCommandType({finish:null})).to.equal('finish');
+      });
       it('should be "wait" if "seconds" key is present', function () {
         expect(inferCommandType({wait:5})).to.equal("wait");
       });
