@@ -273,6 +273,7 @@ export default class FlowDialog extends Dialog {
         case 'conditional': return this._compileConditionalCommand(cmd, path, options);
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
+        case 'setv': return this._compileSetVCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
@@ -294,15 +295,37 @@ export default class FlowDialog extends Dialog {
 
   _compileSetCommand(cmd, path) {
     return async (vars, session) => {
-      var expandedVars = await this._expandCommandParam(cmd.set, vars, session, path);
-      var processedVars = {};
-      for (let v in expandedVars) {
-        setPath(processedVars, v, expandedVars[v]);
-      }
-      await session.save(processedVars);
+      var expandedParams = await this._expandSetParam(cmd.set, vars, session, path);
+      await session.save(expandedParams);
     };
   }
 
+  _compileSetVCommand(cmd, path) {
+    return async (vars, session) => {
+      var expandedParams = await this._expandSetParam(cmd.setv, vars, session, path);
+      session.setv(expandedParams);
+    };
+  }
+
+  async _expandSetParam(params, vars, session, path) {
+    var expandedVars = await this._expandCommandParam(params, vars, session, path);
+    var processedVars = {};
+    const destructureRegex = /\{([\s\w,]*)}/;
+
+    for (let v in expandedVars) {
+      let destructureMatch = destructureRegex.exec(v);
+      if (destructureMatch) {
+        let expanded = expandedVars[v];
+        let destructuredVars = destructureMatch[1].split(",").map(s=>s.trim()).filter(s=>s.length>0);
+        for (let dvar of destructuredVars) {
+          processedVars[dvar] = expanded[dvar];
+        }
+      } else {
+        setPath(processedVars, v, expandedVars[v]);
+      }
+    }
+    return processedVars;
+  }
   _compileWaitCommand(cmd, path) {
     return async (vars,session) => {
       var seconds = await this._expandCommandParam(cmd.wait, vars, session, path);
@@ -1227,6 +1250,8 @@ export function inferCommandType(command) {
     return 'wait';
   } else if (command.set) {
     return 'set';
+  } else if (command.setv) {
+    return 'setv';
   } else if (
     command.hasOwnProperty('if') ||
     command.hasOwnProperty('when') ||

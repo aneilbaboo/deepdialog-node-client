@@ -637,6 +637,35 @@ describe('FlowScript', function () {
       });
     });
 
+    context('expandSetParam', function () {
+      var dialog;
+
+      beforeEach(function () {
+        dialog = new FlowDialog({name: "TestFlowDialog"});
+      });
+
+      it('should expand functions in a provided object', async function() {
+        expect(await dialog._expandSetParam({a:()=>1, b:2, c:$.z}, {z:3})).to.deep.equal({
+          a:1, b:2, c:3
+        });
+      });
+
+      it('should implement destructuring semantics when the key is {v1,v2,...}', async function () {
+        expect(await dialog._expandSetParam({"{a}": ()=>({a:1, b:2, c:3})})).to.deep.equal(
+          {a:1}
+        );
+        expect(await dialog._expandSetParam({"{a,c}": ()=>({a:1, b:2, c:3})})).to.deep.equal(
+          {a:1, c:3}
+        );
+        expect(await dialog._expandSetParam({"{b}": ()=>({a:1, b:2, c:3})})).to.deep.equal(
+          {b:2}
+        );
+        expect(await dialog._expandSetParam({"{_d_}": ()=>({a:1, b:2, c:3, _d_:4})})).to.deep.equal(
+          {_d_:4}
+        );
+      });
+    });
+
     context('expandCommandParam', function () {
       var dialog;
 
@@ -1075,8 +1104,8 @@ describe('FlowScript', function () {
         });
       });
 
-      context('set command', function () {
-        it('should call session set with the literal argument to set', async function () {
+      context('set and setv commands', function () {
+        it('should call session save with the literal argument to set', async function () {
           var session = { save: sinon.stub() };
           var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
@@ -1089,7 +1118,7 @@ describe('FlowScript', function () {
           ).calledOnce).to.be.true;
         });
 
-        it('should call session set with the handler value to set', async function () {
+        it('should call session save with the handler value to set', async function () {
           var session = { save: sinon.stub() };
           var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
@@ -1102,7 +1131,7 @@ describe('FlowScript', function () {
           ).calledOnce).to.be.true;
         });
 
-        it('should call session set, automatically generating objects in a path', async function () {
+        it('should call session save, automatically generating objects in a path', async function () {
           var session = { save: sinon.stub() };
           var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
@@ -1112,6 +1141,37 @@ describe('FlowScript', function () {
           await handler({}, session, []);
           expect(session.save.withArgs(
             sinon.match({a:{b:{c:1, d:2}, e:3}})
+          ).calledOnce).to.be.true;
+        });
+
+        it('should call session set, using destructuring when a destructuring key is present', async function () {
+          var session = { save: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            { set: {"{a,c}": ()=>({a:1,b:2, c:3, d:4}) } }
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.save.withArgs(
+            sinon.match({a:1, c:3})
+          ).calledOnce).to.be.true;
+        });
+
+        it('should call session setv when command is setv, implementing the same param semantics as set', async function () {
+          var session = { setv: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            {
+              setv:{
+                a: 1, // literals
+                b: ()=>2,  // functions
+                "{y,z}":()=>({w:3, x:4, y:5, z:6})} // spread operator
+            }
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.setv.withArgs(
+            sinon.match({a:1, b:2, y:5, z:6})
           ).calledOnce).to.be.true;
         });
       });
