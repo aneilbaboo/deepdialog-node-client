@@ -1,4 +1,4 @@
-import {isString, isArray, isFunction, isUndefined, isNumber} from 'util';
+import {isString, isArray, isFunction, isUndefined, isNumber, isNull} from 'util';
 import {isPlainObject} from 'lodash';
 import assert from 'assert';
 
@@ -144,9 +144,13 @@ export default class FlowDialog extends Dialog {
       if (isFunction(cmd)) {
         addCompiledCommand(cmd);
       } else if (isFlowBreaker(cmd)) {
-        // the next flow should not be executed after the flow breaker,
-        // but should be passed to its subflow
-        //  e.g., for the flow
+        // the next flow should not be executed after a flow breaker.
+        // Instead, it should execute after the flow breaker's subflow
+        //  e.g., in the following flow,
+        //     * the start command is a flow breaker
+        //     * the start.then flow is a subflow
+        //     * the text command "innerNextFlow!" is a next flow
+        //
         // onStart: [
         //   { for: [{i:1}, ({i})=>i<3, {i:1}],
         //     do: [
@@ -156,13 +160,14 @@ export default class FlowDialog extends Dialog {
         //   }
         //   "outerNextFlow!"
         // ]
-        // First, these operations happen
+        //
+        // In this loop we must execute the following operations:
         //   * initialize iteration
         //   * test the condition,
-        //        if it is true, continue otherwise
-        //        start the outerNextFlow
-        //   * run start command
-        //   * wait for MyDialog to complete (flow is broken)
+        //        if it is true, continue;
+        //        otherwise, start the outerNextFlow
+        //   * run start command  (flow is broken)
+        //     > we must wait for MyDialog to complete
         // Then, when MyDialog finishes,
         //   * run the subflow
         //   * run the inner nextFlow
@@ -1319,6 +1324,61 @@ export async function zipPromisesToHash(keys, promises) {
 //
 export const $ = handlerPropertyProxy(vars=>vars);
 
+export const dollarOperators = {
+  gt: (value, other)=>value>other,
+  gte: (value, other)=>value>=other,
+  lt: (value, other)=>value<other,
+  lte: (value, other)=>value<=other,
+  equals: (value, other)=>value==other,
+  isTruthy: (value)=>!!value,
+  isFalsey: (value)=>!value,
+  isNull: (value)=>isNull(value),
+  isUndefined: (value)=>isUndefined(value),
+  isString: (value)=>isString(value),
+  isArray: (value)=>isArray(value),
+  isPlainObject: (value)=>isPlainObject(value),
+  isNumber: (value)=>isNumber(value),
+  add: (value, other)=>value+other,
+  sub: (value, other)=>value-other,
+  mul: (value, other)=>value*other,
+  div: (value, other)=>value/other,
+  pow: (value, other)=>Math.pow(value, other)
+};
+
+function dollarOperatorHandler(target, opName) {
+  return function (...args) {
+    return handlerPropertyProxy(function (vars) {
+      var value = target(vars);
+      args = syncExpandCommandParam(args, vars);
+      // class method - e.g., string.toLowerCase
+      if (value && isFunction(value[opName])) {
+        return value[opName](...args);
+      } else {
+        // dollar operators
+        var op = dollarOperators[opName];
+        if (op) {
+          return op(value, ...args);
+        }
+      }
+    });
+  };
+}
+
+function syncExpandCommandParam(param, vars) {
+  if (isFunction(param)) {
+    return param(vars);
+  } else if (isArray(param)) {
+    return param.map(p=>syncExpandCommandParam(p, vars));
+  } else if (isPlainObject(param)) {
+    let result = {};
+    for (let k in param) {
+      result[k] = syncExpandCommandParam(param[k], vars);
+    }
+  } else {
+    return param;
+  }
+}
+
 function handlerPropertyProxy(handler) {
   return new Proxy(handler, {
     get (target, property) {
@@ -1332,18 +1392,8 @@ function handlerPropertyProxy(handler) {
       } else if (property.startsWith('$')) {
         // it's a function call
         // e.g., $.a.b.$toLowerCase()
-        let trueFnName = property.slice(1);
-        return function (...args) {
-          return handlerPropertyProxy(function (vars) {
-            var value = target(vars);
-            if (
-              value &&
-              isFunction(value[trueFnName])
-            ) {
-              return value[trueFnName](...args);
-            }
-          });
-        };
+        let opName = property.slice(1);
+        return dollarOperatorHandler(target, opName);
       } else {
         var nextTarget = vars=>(target(vars) || {})[property];
         return handlerPropertyProxy(nextTarget);
