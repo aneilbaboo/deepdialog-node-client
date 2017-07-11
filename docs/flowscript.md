@@ -1,13 +1,18 @@
 # FlowScript
 
-FlowScript is a high-level language that lets a chatbot developer write conversational flows using JSON or YAML. A flow is a sequence of commands for the bot to execute, such as sending messages with images and buttons, branching logic, and the ability to start modules called conversational procedures called dialogs.
+## Overview
 
-In practical terms, a flow is a JS Array, and commands are JS Objects, strings or functions.  This means a developer can generate flows programmatically.  Arguments to commands can be generated dynamically by providing a function in place of the string or other literal which is expected.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  
+FlowScript is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images and/or buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
 
- FlowScript provides a high level interface to the DeepDialog API, but also provides access to the lower level service objects (such as the DeepDialog Session). See the documentation [here](./index.md).
+A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. A web server needs to implement methods to handle each interaction that makes up a conversation, and must provide a means of tracking the state of the conversation at each step.  This fragmentation of the flow makes it hard to visualize and manage conversational logic.
 
+In FlowScript you script conversational logic in the order it flows in a conversation. This frees you from worrying about low-level details where this logic ends up scattered over several separate controller methods, and where you are responsible for tracking and managing states yourself.  The FlowScript compiler generates server endpoints for you automatically, using the DeepDialog backend to track conversation state.  This means you can write your bot using familiar control flow structures, yet scale it like an ordinary web service.
 
-### Example
+Dialogs and Sessions are the main building blocks of FlowScript.  Dialogs are analogous to functions: they contain program logic which is run on your bot server. Like functions, they take parameters when started and return a value on completion. The DeepDialog backend provides the storage for managing the dialog call stack, including local and global variables.  These capabilities are abstracted by the Session. Each session tracks the state of a conversation with an endpoint.  This is usually a user, but could be a chatroom.
+
+In practical terms, a flow is a Javascript Array, and commands are Javascript Objects or functions.  This means a developer can generate flows programmatically.  Parts of the conversation can be generated dynamically by replacing part of the conversation tree with a function.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  If you need to, you can also access the DeepDialog API directly using a function placed inside a flow. See the documentation [here](./index.md).
+
+### Quick Look
 
 ```javascript
 // dialogs/astrologer.js
@@ -17,28 +22,30 @@ export const Astrologer = new FlowDialog({
   name: "Astrologer",
   flows: {
     onStart: [
-      "Hi, I'm Sybil the Astrologer...",
-      { wait: 2 }, // 2 second pause
+      "Hi, I'm Sybil the Astrologer...", // simple text message
+
+      // message with two quick reply action buttons
       {
-        start: ["Sys:YesNoPrompt", {
-          text: "I can read your horoscope. Would you like that?"
-        }],
-        then: {
-          if: ({value})=>value,
-          then: {
-            text: "Would you like to subscribe for daily readings?",
-            actions: {
-              yes: [
-                { set: {Subscribed: true} }, //
-                "You are now subscribed for daily readings"
-              ],
-              no: [
-                { set: {Subscribed: false} },
-                "Ok, I won't subscribe you to daily readings"
-              ]
+        text: "I can read your horoscope. Would you like that?"
+        actions: {
+          yes: {
+            // start a dialog which actually reads the horoscope...
+            start: "ReadDailyHoroscope",
+            then: {
+              text: "Would you like to subscribe for daily readings?",
+              actions: {
+                yes: [
+                  { set: {Subscribed: true} }, //
+                  "You are now subscribed for daily readings"
+                ],
+                no: [
+                  { set: {Subscribed: false} },
+                  "Ok, I won't subscribe you to daily readings"
+                ]
+              }
             }
           },
-          else: "I'm sorry, I'm just a simple bot.  I can only tell horoscopes."
+          no: "I'm sorry, I'm just a simple bot.  I can only tell horoscopes."
         }
       }
     ]
@@ -51,20 +58,31 @@ export {FlowDialog} from 'deepdialog';
 export const ReadHoroscope = new FlowDialog({
   name: "ReadHoroscope",
   flows: {
-    start: {
-      if: ({ZodiacSign})=>!ZodiacSign,
-      then: async ({ZodiacSign}) => {
-        var horoscope = await retrieveHoroscope(ZodiacSign),
-        session.send(horoscope);
-      },
-      else: {
-        start: "PickSign",
-        then: {
-          if: {result}=>result,
-          then: async ({result}) => await session.save({ZodiacSign: result});
+    onStart: [
+      {
+        // Make sure the user has chosen their Zodiac sign
+        unless: $.ZodiacSign,
+        do: {
+          // if not, start a dialog to query for their sign
+          start: "PickSign",
+          then: {
+            if: $.value,
+            then: { set: {ZodiacSign: $.value } }
+          }
         }
-      }
-    }
+      },
+      {
+        unless: $.ZodiacSign,
+        do: [
+          "I'm sorry, I can't read your horoscope until you pick your sign",
+          { finish: true }
+        ]
+      },
+      // send the horoscope to the user:
+      // here, we dynamically determine the horoscope
+      // by calling an external
+      { text: ({ZodiacSign})=>await retrieveHoroscope(ZodiacSign) }
+    ]
   }
 });
 
@@ -84,10 +102,8 @@ export const HelloWorld = new FlowDialog({
   name: "HelloWorld",
   flows: {
     onStart: [
-      {
-        type: "text"
-        text: "Hello human!"
-      }
+      // sequence of commands for the bot to execute goes here:
+      "Hello World!"
     ]
   }
 });
@@ -220,13 +236,16 @@ const MyDialog = new FlowDialog({
 
 ## String interpolation
 
-The system interpolates keys in vars into strings so you can write:
+The system interpolates variable names inside double curly braces in strings:
 
+{% raw %}
 ```javascript
 { ...
-  then: "So your favorite color is {{value}}"
+  then: "So your favorite color is {{ value }}"
 }
 ```
+{% endraw %}
+
 as a shortcut for:
 ```javascript
 {
