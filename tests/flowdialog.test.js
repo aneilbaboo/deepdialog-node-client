@@ -15,7 +15,7 @@ import FlowDialog, {
   isExecCommand, isFlowBreaker,
   inferCommandType, inferActionType,
   normalizeFlow, normalizeAction, normalizeExecCommand,
-  normalizeIterationCommand,
+  normalizeIterationCommand, normalizeSwitchCommand,
   normalizeActions, normalizeMessageCommand,
   isValidFlowId, appendFlowPathId, flowPathFromKey,
   flowIdToText, zipPromisesToHash,
@@ -67,6 +67,9 @@ describe('FlowScript', function () {
       });
       it('should be "conditional" if "unless" key is present', function () {
         expect(inferCommandType({unless:()=>{}})).to.equal("conditional");
+      });
+      it('should be "switch" if "switch" key is present', function () {
+        expect(inferCommandType({switch:()=>{}})).to.equal("switch");
       });
     });
 
@@ -341,6 +344,62 @@ describe('FlowScript', function () {
       it('should not transform an array arg', function () {
         expect(normalizeExecCommand({exec:['handler', {a:1}]})).to.deep.equal({
           exec: ["handler", {a:1}]
+        });
+      });
+    });
+
+    context('normalizeSwitchCommand', function () {
+      it('should normalize object cases', function () {
+        expect(normalizeSwitchCommand({
+          switch:true,
+          cases: {
+            a: ['a'],
+            b: ['b']
+          }
+        })).to.deep.equal({
+          type: 'switch',
+          id: 'switch',
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}],
+          default: undefined
+        });
+      });
+      it('should leave array cases as is', function () {
+        expect(normalizeSwitchCommand({
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}]
+        })).to.deep.equal({
+          type: 'switch',
+          id: 'switch',
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}],
+          default: undefined
+        });
+      });
+      it('should preserve the default clause', function () {
+        expect(normalizeSwitchCommand({
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}],
+          default: ["default"]
+        })).to.deep.equal({
+          type:'switch',
+          id: 'switch',
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}],
+          default: ["default"]
+        });
+      });
+      it('should contain the provided id', function () {
+        expect(normalizeSwitchCommand({
+          id: 'test',
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}]
+        })).to.deep.equal({
+          type: 'switch',
+          id: 'test',
+          switch:true,
+          cases: [ {id:'a', do:['a']}, {id:'b', do:['b']}],
+          default: undefined
         });
       });
     });
@@ -1436,6 +1495,219 @@ describe('FlowScript', function () {
 
           await handler({a:1},"the-session",[]);
           expect(doStub.notCalled).to.be.ok;
+        });
+      });
+
+      context('switch command', function () {
+        it('should run the provided case', async function () {
+          var case1Stub = sinon.stub();
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow({
+            switch: 'case1',
+            cases: {
+              case1: case1Stub
+            }
+          },
+          ['onStart'],
+          {}); // no options
+          await handler({a:1},'the-session',[]);
+          expect(case1Stub.callCount).to.equal(1);
+        });
+
+        it('should execute cases in order when no breaks are provided', async function () {
+          var case1Stub = sinon.stub();
+          var case2Stub = sinon.stub();
+          var case3Stub = sinon.stub();
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow({
+            switch: ({a})=>a,
+            cases: {
+              case1: case1Stub,
+              case2: case2Stub,
+              case3: case3Stub
+            }
+          },
+          ['onStart'],
+          {}); // no options
+
+          await handler({a:'case1'},'the-session',[]);
+          expect(case1Stub.callCount).to.equal(1);
+          expect(case2Stub.callCount).to.equal(1);
+          expect(case3Stub.callCount).to.equal(1);
+
+          await handler({a:'case2'},'the-session',[]);
+          expect(case1Stub.callCount).to.equal(1);
+          expect(case2Stub.callCount).to.equal(2);
+          expect(case3Stub.callCount).to.equal(2);
+
+          await handler({a:'case3'},'the-session',[]);
+          expect(case1Stub.callCount).to.equal(1);
+          expect(case2Stub.callCount).to.equal(2);
+          expect(case3Stub.callCount).to.equal(3);
+        });
+
+        it('should execute the default flow if no matching cases are found', async function () {
+          var case1Stub = sinon.stub();
+          var case2Stub = sinon.stub();
+          var case3Stub = sinon.stub();
+          var defaultStub = sinon.stub();
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow({
+            switch: ({a})=>a,
+            cases: {
+              case1: case1Stub,
+              case2: case2Stub,
+              case3: case3Stub
+            },
+            default: defaultStub
+          },
+          ['onStart'],
+          {}); // no options
+
+          await handler({a:'not-present'},'the-session',[]);
+          expect(case1Stub.notCalled).to.be.ok;
+          expect(case2Stub.notCalled).to.be.ok;
+          expect(case3Stub.notCalled).to.be.ok;
+          expect(defaultStub.callCount).to.equal(1);
+        });
+
+        context('when a break is encountered', function () {
+
+          it('in the first case, it should stop executing', async function () {
+            var case1Stub = sinon.stub();
+            var case2Stub = sinon.stub();
+            var case3Stub = sinon.stub();
+            var defaultStub = sinon.stub();
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow({
+              switch: ({a})=>a,
+              cases: {
+                case1: [ case1Stub, {break:true} ],
+                case2: case2Stub,
+                case3: case3Stub
+              },
+              default: defaultStub
+            },
+            ['onStart'],
+            {}); // no options
+
+            await handler({a:'case1'},'the-session',[]);
+            expect(case1Stub.callCount).to.equal(1);
+            expect(case2Stub.notCalled).to.be.ok;
+            expect(case3Stub.notCalled).to.be.ok;
+            expect(defaultStub.notCalled).to.be.ok;
+          });
+
+          it('in middle case, it should stop executing', async function () {
+            var case1Stub = sinon.stub();
+            var case2Stub = sinon.stub();
+            var case3Stub = sinon.stub();
+            var defaultStub = sinon.stub();
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow({
+              switch: ({a})=>a,
+              cases: {
+                case1: case1Stub,
+                case2: [case2Stub, {break:true}],
+                case3: case3Stub
+              },
+              default: defaultStub
+            },
+            ['onStart'],
+            {}); // no options
+
+            await handler({a:'case1'},'the-session',[]);
+            expect(case1Stub.callCount).to.equal(1);
+            expect(case2Stub.callCount).to.equal(1);
+            expect(case3Stub.notCalled).to.be.ok;
+            expect(defaultStub.notCalled).to.be.ok;
+          });
+        });
+
+        context('when a nextFlow exists', function () {
+          it('should transfer control to the nextFlow from a break when default is present', async function () {
+            var case1Stub = sinon.stub();
+            var case2Stub = sinon.stub();
+            var case3Stub = sinon.stub();
+            var defaultStub = sinon.stub();
+            var nextFlowStub = sinon.stub();
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              {
+                switch: ({a})=>a,
+                cases: {
+                  case1: case1Stub,
+                  case2: [case2Stub, {break:true}],
+                  case3: case3Stub
+                },
+                default: defaultStub
+              },
+              nextFlowStub
+            ],
+            ['onStart'],
+            {}); // no options
+
+            await handler({a:'case1'},'the-session',[]);
+            expect(case1Stub.callCount).to.equal(1);
+            expect(case2Stub.callCount).to.equal(1);
+            expect(nextFlowStub.callCount).to.equal(1);
+            expect(case3Stub.notCalled).to.be.ok;
+            expect(defaultStub.notCalled).to.be.ok;
+          });
+
+          it('should transfer control to the nextFlow from a break when default is not present', async function () {
+            var case1Stub = sinon.stub();
+            var case2Stub = sinon.stub();
+            var case3Stub = sinon.stub();
+            var nextFlowStub = sinon.stub();
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              {
+                switch: ({a})=>a,
+                cases: {
+                  case1: case1Stub,
+                  case2: [case2Stub, {break:true}],
+                  case3: case3Stub
+                }
+              },
+              nextFlowStub
+            ],
+            ['onStart'],
+            {}); // no options
+
+            await handler({a:'case1'},'the-session',[]);
+            expect(case1Stub.callCount).to.equal(1);
+            expect(case2Stub.callCount).to.equal(1);
+            expect(nextFlowStub.callCount).to.equal(1);
+            expect(case3Stub.notCalled).to.be.ok;
+          });
+
+          it('should transfer control to the nextFlow when no break is present', async function () {
+            var case1Stub = sinon.stub();
+            var case2Stub = sinon.stub();
+            var case3Stub = sinon.stub();
+            var nextFlowStub = sinon.stub();
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              {
+                switch: ({a})=>a,
+                cases: {
+                  case1: case1Stub,
+                  case2: case2Stub,
+                  case3: case3Stub
+                }
+              },
+              nextFlowStub
+            ],
+            ['onStart'],
+            {}); // no options
+
+            await handler({a:'case1'},'the-session',[]);
+            expect(case1Stub.callCount).to.equal(1);
+            expect(case2Stub.callCount).to.equal(1);
+            expect(case3Stub.callCount).to.equal(1);
+            expect(nextFlowStub.callCount).to.equal(1);
+          });
         });
       });
 

@@ -271,6 +271,7 @@ export default class FlowDialog extends Dialog {
         case 'start': return this._compileStartCommand(cmd, path, options);
         case 'finish': return this._compileFinishCommand(cmd, path, options);
         case 'conditional': return this._compileConditionalCommand(cmd, path, options);
+        case 'switch': return this._compileSwitchCommand(cmd, path, options);
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
         case 'setv': return this._compileSetVCommand(cmd, path, options);
@@ -529,6 +530,61 @@ export default class FlowDialog extends Dialog {
         session
       );
     }
+  }
+
+  _compileSwitchCommand(cmd, path, options={}) {
+    var id = cmd.id || 'switch';
+    var cmdPath = appendFlowPathId(path, id);
+    var endFlowPath = appendFlowPathId(cmdPath, 'end');
+    var nextFlowPath = endFlowPath;
+
+    // end flow is where breaks go, and is the last
+    var endHandler = this._compileFlow([], endFlowPath, options);
+
+    // in the following, breakFlow points at the endFlow
+    options = {...options, breakFlow:endFlowPath};
+
+    if (cmd.default) {
+      var defaultFlowPath = appendFlowPathId(cmdPath, 'default');
+
+      // default flow, completes in the endFlow
+      var defaultHandler = this._compileFlow(cmd.default, defaultFlowPath,
+        {...options, nextFlowPath: endFlowPath}
+      );
+
+      // last case flow will continue into the default flow:
+      nextFlowPath = defaultFlowPath;
+    }
+
+    // normalized switch command cases is an array of objects:
+    // [ {id:'the-case', do: [...] }, {id:'the-case', do: [...] }]
+    // iterate from LAST case statement to first
+    for (let i=cmd.cases.length-1; i>=0; i--) {
+      let currentCase = cmd.cases[i];
+      let currentCasePath;
+      currentCasePath = appendFlowPathId(cmdPath, 'case', currentCase.id);
+      this._compileFlow(currentCase.do, currentCasePath,
+        // nextFlow points at the lexically next case statement
+        // so case statements flow to the next case unless
+        //
+        {...options, nextFlow:nextFlowPath}
+      );
+
+      nextFlowPath = currentCasePath;
+    }
+
+    return async (vars, session) => {
+      let switchVal = await this._expandCommandParam(cmd.switch, vars, session, path);
+      let casePath = appendFlowPathId(cmdPath, 'case', switchVal);
+      let caseHandler = this._getFlowHandler(casePath, false);
+      if (caseHandler) {
+        await caseHandler(vars, session, path);
+      } else if (defaultHandler) {
+        await defaultHandler(vars, session);
+      } else {
+        await endHandler(vars, session);
+      }
+    };
   }
 
   _compileConditionalCommand(cmd, path, options={}) {
@@ -795,10 +851,10 @@ export default class FlowDialog extends Dialog {
     throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
   }
 
-  _getFlowHandler(path) {
+  _getFlowHandler(path, strict=true) {
     var fkey = this.flowKey(path);
     var result = this._flowHandlers[fkey];
-    if (!result) {
+    if (!result && strict) {
       throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
     }
     return result;
@@ -875,6 +931,8 @@ export function normalizeFlowCommand(command) {
           return normalizeSetCommand(command);
         case 'conditional':
           return normalizeConditionalCommand(command);
+        case 'switch':
+          return normalizeSwitchCommand(command);
         case 'start':
           return normalizeStartCommand(command);
         case 'exec':
@@ -926,6 +984,29 @@ export function normalizeConditionalCommand(command) {
       else: command.do
     };
   }
+}
+
+export function normalizeSwitchCommand(command) {
+  log.silly('normalizeSwitchCommand(%j)', command);
+  var cases = [];
+
+  if (isPlainObject(command.cases)) {
+    for (let caseId in command.cases) {
+      cases.push({id:caseId, do:command.cases[caseId]});
+    }
+  } else if (isArray(command.cases)) {
+    cases = command.cases;
+  } else {
+    throw new Error(`Switch command is missing cases key: ${JSON.stringify(command)}`);
+  }
+
+  return {
+    type: 'switch',
+    id: command.id || 'switch',
+    switch: command.switch,
+    cases,
+    default: command.default
+  };
 }
 
 export function normalizeIterationCommand(command) {
@@ -1258,6 +1339,8 @@ export function inferCommandType(command) {
     command.hasOwnProperty('unless')
   ) { // could be null
     return 'conditional';
+  } else if (command.hasOwnProperty('switch')) {
+    return 'switch';
   } else if (command.exec) {
     return 'exec';
   } else if (
