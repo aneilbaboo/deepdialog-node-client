@@ -12,6 +12,8 @@ Dialogs and Sessions are the main building blocks of FlowScript.  Dialogs are an
 
 In practical terms, a flow is a Javascript Array, and commands are Javascript Objects or functions.  This means a developer can generate flows programmatically.  Parts of the conversation can be generated dynamically by replacing part of the conversation tree with a function.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  If you need to, you can also access the DeepDialog API directly using a function placed inside a flow. See the documentation [here](./index.md).
 
+{% raw %}
+
 ### Quick Look
 
 ```javascript
@@ -238,13 +240,11 @@ const MyDialog = new FlowDialog({
 
 The system interpolates variable names inside double curly braces in strings:
 
-{% raw %}
 ```javascript
 { ...
   then: "So your favorite color is {{ value }}"
 }
 ```
-{% endraw %}
 
 as a shortcut for:
 ```javascript
@@ -467,6 +467,27 @@ Run flow conditionally: if/then/else logic
 { when: condition,  do: [...] }
 
 { unless: condition, do: [...] }
+```
+
+### Switch command
+
+Branching logic
+
+```javascript
+{
+  switch: $.fruit,
+  cases: {
+    apples: [  
+      orderApples,
+      {break:true} // if not provided, the oranges flow will execute
+    ],
+    oranges: [
+      orderOranges,
+      {break:true}
+    ]
+  },
+  default: "We only have apples and oranges"
+}
 ```
 
 ### Set command
@@ -856,3 +877,4 @@ export const ApplianceSalesDialog = new FlowDialog({
   }
 })
 ```
+{% endraw %}
