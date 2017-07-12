@@ -204,6 +204,9 @@ $.a.$gt($.b) // sugar for ({a,b})=>a>b
 $.a.$gte($.b) // sugar for ({a,b})=>a>=b
 // also: $lt, $lte, $equal, $add, $sub, $mul, $div, $pow
 
+// bare dollar property takes a function and applies it to result
+var addOne = x=>x+1;
+$.a.b.$(addOne)({a:{b:3}}) // => 4
 ```
 
 See also the [Advanced Topics](#advanced-topics) section.
