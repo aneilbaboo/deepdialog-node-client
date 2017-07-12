@@ -7,7 +7,8 @@ import Session from './session';
 import log from './log';
 import {anyPattern as any} from './constants';
 import {sleep} from './util';
-import FlowDialog, {$} from './flowdialog';
+import FlowDialog from './flowdialog';
+import {$} from './dollar-operator';
 
 export {
   App,

@@ -1,4 +1,4 @@
-import {isString, isArray, isFunction, isUndefined, isNumber, isNull} from 'util';
+import {isString, isArray, isFunction, isUndefined, isNumber} from 'util';
 import {isPlainObject} from 'lodash';
 import assert from 'assert';
 
@@ -1422,90 +1422,4 @@ export async function zipPromisesToHash(keys, promises) {
   var values = await Promise.all(promises);
   keys.forEach((key, idx) => result[key] = values[idx]);
   return result;
-}
-
-// Variable access sugar: $.myVar instead of ({myVar})=>myVar
-// E.g.,
-// { if: $.myVar, then: [ ... ] }
-// instead of
-// { if: ({myVar})=>myVar, then: [ ... ] }
-//
-export const $ = handlerPropertyProxy(vars=>vars);
-
-export const dollarOperators = {
-  gt: (value, other)=>value>other,
-  gte: (value, other)=>value>=other,
-  lt: (value, other)=>value<other,
-  lte: (value, other)=>value<=other,
-  equals: (value, other)=>value==other,
-  isTruthy: (value)=>!!value,
-  isFalsey: (value)=>!value,
-  isNull: (value)=>isNull(value),
-  isUndefined: (value)=>isUndefined(value),
-  isString: (value)=>isString(value),
-  isArray: (value)=>isArray(value),
-  isPlainObject: (value)=>isPlainObject(value),
-  isNumber: (value)=>isNumber(value),
-  add: (value, other)=>value+other,
-  sub: (value, other)=>value-other,
-  mul: (value, other)=>value*other,
-  div: (value, other)=>value/other,
-  pow: (value, other)=>Math.pow(value, other)
-};
-
-function dollarOperatorHandler(target, opName) {
-  return function (...args) {
-    return handlerPropertyProxy(function (vars) {
-      var value = target(vars);
-      args = syncExpandCommandParam(args, vars);
-      // class method - e.g., string.toLowerCase
-      if (value && isFunction(value[opName])) {
-        return value[opName](...args);
-      } else {
-        // dollar operators
-        var op = dollarOperators[opName];
-        if (op) {
-          return op(value, ...args);
-        }
-      }
-    });
-  };
-}
-
-function syncExpandCommandParam(param, vars) {
-  if (isFunction(param)) {
-    return param(vars);
-  } else if (isArray(param)) {
-    return param.map(p=>syncExpandCommandParam(p, vars));
-  } else if (isPlainObject(param)) {
-    let result = {};
-    for (let k in param) {
-      result[k] = syncExpandCommandParam(param[k], vars);
-    }
-  } else {
-    return param;
-  }
-}
-
-function handlerPropertyProxy(handler) {
-  return new Proxy(handler, {
-    get (target, property) {
-      if (
-        target.hasOwnProperty(property) ||
-        !isString(property) ||
-        property=='call' ||
-        property=='inspect'
-      ) {
-        return target[property];
-      } else if (property.startsWith('$')) {
-        // it's a function call
-        // e.g., $.a.b.$toLowerCase()
-        let opName = property.slice(1);
-        return dollarOperatorHandler(target, opName);
-      } else {
-        var nextTarget = vars=>(target(vars) || {})[property];
-        return handlerPropertyProxy(nextTarget);
-      }
-    }
-  });
 }
