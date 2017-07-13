@@ -209,15 +209,17 @@ var addOne = x=>x+1;
 $.a.b.$(addOne)({a:{b:3}}) // => 4
 ```
 
-##### Call key is forbidden!!
+##### $.call and $.toJSON are forbidden!!
 
 ```javascript
 $.call         // behavior is undefined
-$.a.b.c.call   // behavior is undefined!
+$.a.b.c.call   // behavior is undefined
+$.toJSON       // behavior is undefined
 
 // instead, use a function
 ({call})=>call  // instead of $.call
 ({a})=>a.b.c.call  // instead of $.a.b.c.call
+({toJSON})=>toJSON // instead of $.toJSON
 ```
 
 See also the [Advanced Topics](#advanced-topics) section.
