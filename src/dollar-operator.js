@@ -81,10 +81,8 @@ function handlerPropertyProxy(handler) {
   return new Proxy(handler, {
     get (target, property) {
       if (
-        target.hasOwnProperty(property) ||
         !isString(property) ||
-        property=='call' ||
-        property=='inspect'
+        property=='call'
       ) {
         return target[property];
       } else if (property.startsWith('$')) {

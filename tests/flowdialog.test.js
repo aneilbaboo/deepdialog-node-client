@@ -1908,6 +1908,41 @@ describe('FlowScript', function () {
 
         });
 
+        it('should correctly run an iteration with a nested conditional', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var events = [];
+          var session = {
+            async send(params) { events.push({send:params}); },
+            async save(params) {
+              this.locals=params;
+            },
+            locals:{},
+            globals:{}
+          };
+          var isEven = (x)=>x%2==0;
+          var handler = dialog._compileFlow([
+            {
+              until: $.i.$gt(2),
+              do: [
+                {
+                  if: $.i.$(isEven),
+                  then: "{{i}} is even",
+                  else: "{{i}} is odd"
+                },
+                {set: {i:$.i.$add(1)}}
+              ]
+            }
+          ],
+          ['onStart']);
+
+          session.locals = {i:0};
+          await handler({}, session);
+          expect(events).to.deep.equal([
+            {send:{type:"text", text:"0 is even"}},
+            {send:{type:"text", text:"1 is odd"}},
+            {send:{type:"text", text:"2 is even"}}
+          ]);
+        });
       });
 
       context('message command', function () {
