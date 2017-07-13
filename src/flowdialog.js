@@ -422,7 +422,7 @@ export default class FlowDialog extends Dialog {
 
         return itemsArray.map(item=> ({
           ...item,
-          actions: item.actions.map(action=>this._actionWithPayload(action, session))
+          actions: item.actions.map(action=>this._finalizedAction(action, session))
         }));
       };
     } else if (isExecCommand(items)) {
@@ -458,7 +458,7 @@ export default class FlowDialog extends Dialog {
     if (isFunction(actions)) {
       return async (vars, session)=>{
         var resolvedActions = await actions(vars, session, path);
-        return resolvedActions.map(action=>this._actionWithPayload(action, session));
+        return resolvedActions.map(action=>this._finalizedAction(action, session));
       };
     } else if (isExecCommand(actions)) {
       return this._compileExecCommand(actions, path);
@@ -484,7 +484,7 @@ export default class FlowDialog extends Dialog {
    */
   _compileMessageAction(action, path, options, defaultType) {
     if (isFunction(action)) {
-      return async (vars, session)=>this._actionWithPayload(
+      return async (vars, session)=>this._finalizedAction(
         await action(vars, session, path),
         session
       );
@@ -505,27 +505,29 @@ export default class FlowDialog extends Dialog {
         thenHandler = this._getFlowHandler(options.nextFlow);
       }
 
-      // depending on the action type,
-      // add an onPostback or onPayload handler:
-      switch (actionCopy.type) {
-        case 'postback':
-          log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
-          this.onPostback(actionFlowKey, async (session, args) => {
-            await thenHandler(makeHandlerVars(session, args), session, path);
-          });
-          break;
-        case 'reply':
-          log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
-          this.onPayload(actionFlowKey, async (session) => {
-            await thenHandler(makeHandlerVars(session), session, path);
-          });
-          break;
-        default:
-          throw new Error(`Invalid action: then and thenFlow may only be used with `+
-            `postback and reply type actions, but received: ${JSON.stringify(action)}`);
+      if (actionCopy.thenFlow) {
+        // depending on the action type,
+        // add an onPostback or onPayload handler:
+        switch (actionCopy.type) {
+          case 'postback':
+            log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
+            this.onPostback(actionFlowKey, async (session, args) => {
+              await thenHandler(makeHandlerVars(session, args), session, path);
+            });
+            break;
+          case 'reply':
+            log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
+            this.onPayload(actionFlowKey, async (session) => {
+              await thenHandler(makeHandlerVars(session), session, path);
+            });
+            break;
+          default:
+            throw new Error(`Invalid action: then and thenFlow may only be used with `+
+              `postback and reply type actions, but received: ${JSON.stringify(action)}`);
+        }
       }
 
-      return async (vars, session)=>this._actionWithPayload(
+      return async (vars, session)=>this._finalizedAction(
         await this._expandCommandParam(actionCopy, vars, session, path, this._namedHandlers),
         session
       );
@@ -752,8 +754,8 @@ export default class FlowDialog extends Dialog {
     };
   }
 
-  _actionWithPayload(action, session) {
-    log.silly('_actionWithPayload(%j)', action);
+  _finalizedAction(action, session) {
+    log.silly('_finalizedAction(%j)', action);
     if (action.then) {
       throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
     }
@@ -778,6 +780,8 @@ export default class FlowDialog extends Dialog {
           throw new Error(`Invalid action - thenFlow is only permitted in postback and reply actions: ${action}`);
       }
     } else {
+      action = {...action};
+      delete action.id;
       return action;
     }
   }
