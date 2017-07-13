@@ -209,6 +209,17 @@ var addOne = x=>x+1;
 $.a.b.$(addOne)({a:{b:3}}) // => 4
 ```
 
+##### Call key is forbidden!!
+
+```javascript
+$.call         // behavior is undefined
+$.a.b.c.call   // behavior is undefined!
+
+// instead, use a function
+({call})=>call  // instead of $.call
+({a})=>a.b.c.call  // instead of $.a.b.c.call
+```
+
 See also the [Advanced Topics](#advanced-topics) section.
 
 ### Named Handlers
