@@ -654,9 +654,10 @@ export default class FlowDialog extends Dialog {
         let initialVars = await this._expandCommandParam(initializer, vars, session, path);
         await session.save(initialVars);
       };
-    } else if (!isUndefined(initializer)) {
-      throw new Error(`Invalid initializer in for command: ${initializer}`);
+    } else if (!initializer) {
+      return ()=>{};
     }
+    throw new Error(`Invalid initializer in for command: ${initializer}`);
   }
 
   _compileIterationCondition(condition, path) {
@@ -690,6 +691,8 @@ export default class FlowDialog extends Dialog {
         }
         await session.save(iterVars);
       };
+    } else if (!increment) {
+      return ()=>{};
     }
     throw new Error(`Invalid iteration condition. Expecting a function or `+
       `object, but received: ${increment}`

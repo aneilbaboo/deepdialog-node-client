@@ -1846,6 +1846,68 @@ describe('FlowScript', function () {
             });
           });
         });
+        context('using until syntax,', function () {
+          it('should execute the until loop until the condition is true', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var events = [];
+            var session = {
+              async send(params) { events.push({send:params}); },
+              async save(params) {
+                this.locals=params;
+              },
+              locals:{},
+              globals:{}
+            };
+            var handler = dialog._compileFlow([
+              { until: $.i.$gt(2),
+                do: [
+                  "i={{i}}",
+                  {set: {i: $.i.$add(1)}}
+                ]
+              }
+            ], ['onStart']);
+            session.locals={i:0};
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {send:{type:"text", text:"i=0"}},
+              {send:{type:"text", text:"i=1"}},
+              {send:{type:"text", text:"i=2"}}
+            ]);
+          });
+
+        });
+
+        context('using while syntax,', function () {
+          it('should execute the while loop while the condition is true', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var events = [];
+            var session = {
+              async send(params) { events.push({send:params}); },
+              async save(params) {
+                this.locals=params;
+              },
+              locals:{},
+              globals:{}
+            };
+            var handler = dialog._compileFlow([
+              { while: $.i.$lt(3),
+                do: [
+                  "i={{i}}",
+                  {set: {i: $.i.$add(1)}}
+                ]
+              }
+            ], ['onStart']);
+            session.locals={i:0};
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {send:{type:"text", text:"i=0"}},
+              {send:{type:"text", text:"i=1"}},
+              {send:{type:"text", text:"i=2"}}
+            ]);
+          });
+
+        });
+
       });
 
       context('message command', function () {
@@ -2177,7 +2239,6 @@ describe('FlowScript', function () {
           });
         });
       });
-
 
       context('when provided a flow with hierarchical actions', function () {
         var dialog;
