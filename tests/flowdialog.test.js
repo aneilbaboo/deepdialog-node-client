@@ -2273,6 +2273,109 @@ describe('FlowScript', function () {
             }]);
           });
         });
+
+        context('containing various other actions', function () {
+          var makeFlowWithActions = function (actions) {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            return dialog._compileFlow([
+              {
+                text: "text",
+                actions
+              }
+            ], [
+              'onStart'
+            ]);
+          };
+
+          it('should compile a link action', async function () {
+            var handler = makeFlowWithActions({
+              myLink: {
+                uri: "http://something.com"
+              }
+            });
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await handler({a:1},session);
+
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([
+              { type: 'text', text: "text",
+                actions: [{
+                  type:'link',
+                  text: 'myLink',
+                  uri:'http://something.com'
+                }]
+              }
+            ]);
+          });
+
+          it('should compile a buy action', async function () {
+            var handler = makeFlowWithActions({
+              shoes: {
+                amount: 5000
+              }
+            });
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await handler({a:1},session);
+
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([
+              { type: 'text', text: "text",
+                actions: [{
+                  type:'buy',
+                  text: 'shoes',
+                  amount: 5000
+                }]
+              }
+            ]);
+          });
+
+          it('should compile a locationRequest', async function () {
+            var handler = makeFlowWithActions({
+              "my location": {
+                type: 'locationRequest'
+              }
+            });
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await handler({a:1},session);
+
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([
+              { type: 'text', text: "text",
+                actions: [{
+                  type:'locationRequest',
+                  text: 'my location'
+                }]
+              }
+            ]);
+          });
+
+          it('should compile a share action', async function () {
+            var handler = makeFlowWithActions({
+              "share": {
+                type: 'share'
+              }
+            });
+            var events = [];
+            var session = { async send(params) { events.push(params); } };
+            await handler({a:1},session);
+
+            // postback handler doesn't trigger the next flow
+            expect(events).to.deep.equal([
+              { type: 'text', text: "text",
+                actions: [{
+                  type:'share'
+                }]
+              }
+            ]);
+          });
+
+
+
+        });
+
       });
 
       context('when provided a flow with hierarchical actions', function () {
