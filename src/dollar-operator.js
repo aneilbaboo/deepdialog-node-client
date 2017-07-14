@@ -80,11 +80,10 @@ function syncExpandCommandParam(param, vars) {
 function handlerPropertyProxy(handler) {
   return new Proxy(handler, {
     get (target, property) {
-      if (
-        !isString(property) ||
-        property=='call'
-      ) {
+      if (property=='call') {
         return target[property];
+      } else if (property=='toJSON') {
+        return target.toString;
       } else if (property.startsWith('$')) {
         let opName = property.slice(1);
         // it's a function call
@@ -93,7 +92,10 @@ function handlerPropertyProxy(handler) {
         return dollarOperatorHandler(target, opName);
 
       } else {
-        var nextTarget = vars=>(target(vars) || {})[property];
+        var nextTarget = vars=>{
+          var resolvedValue = target(vars) || {};
+          return resolvedValue[property];
+        };
         return handlerPropertyProxy(nextTarget);
       }
     }
