@@ -26,7 +26,8 @@
     "lintfix": "eslint ./src --fix",
     "testonly": "mocha $npm_package_options_mocha",
     "test": "npm run lint && npm run testonly",
-    "console": "node --require babel-register --require babel-polyfill -e 'let deepdialog=require(`./src`); for (let symbol in deepdialog) { this.global[symbol] = deepdialog[symbol] };' -i"
+    "console": "node --require babel-register --require babel-polyfill -e 'let deepdialog=require(`./src`); for (let symbol in deepdialog) { this.global[symbol] = deepdialog[symbol] };' -i",
+    "debugtest": "mocha --inspect-brk $npm_package_options_mocha"
   },
   "directories": {
     "lib": ""
@@ -44,7 +45,7 @@
     "eslint-mocha": "0.1.0",
     "eslint-plugin-import": "^2.2.0",
     "eslint-plugin-mocha": "4.7.0",
-    "mocha": "3.2.0",
+    "mocha": "3.4.2",
     "sinon": "2.3.5"
   },
   "dependencies": {
