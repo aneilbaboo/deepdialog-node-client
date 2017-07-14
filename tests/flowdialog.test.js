@@ -1742,6 +1742,32 @@ describe('FlowScript', function () {
             ]);
           });
 
+          it('should accept a do flow which is not an array', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              { for: [{i:1}, ({i})=>i<6, {i:2}],
+                do: "Hello {{i}}"
+              }
+            ], ['onStart']);
+            var events = [];
+            var session = {
+              vars: {},
+              async send(params) { events.push(params); },
+              async save(obj) {
+                this.vars = {...this.vars,...obj};
+              },
+              get globals() { return {}; },
+              get locals() { return this.vars; }
+            };
+
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {type: 'text', text: 'Hello 1'},
+              {type: 'text', text: 'Hello 3'},
+              {type: 'text', text: 'Hello 5'},
+            ]);
+          });
+
           it('should stop iterating when it encounters a break command', async function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
             var handler = dialog._compileFlow([

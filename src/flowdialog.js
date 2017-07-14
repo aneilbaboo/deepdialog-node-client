@@ -1,6 +1,5 @@
 import {isString, isArray, isFunction, isUndefined, isNumber} from 'util';
 import {isPlainObject} from 'lodash';
-import assert from 'assert';
 
 import micromustache from 'micromustache';
 
@@ -619,6 +618,8 @@ export default class FlowDialog extends Dialog {
     var loopPath = appendFlowPathId(path, id, 'loop'); // includes the condition
     var endPath = appendFlowPathId(path, id, 'end');
 
+    doFlow = isArray(doFlow) ? doFlow : [doFlow];
+
     // must install the loopFlow so we can compile the doFlow which
     // references it
     var compiledLoop = async (vars, session) => {
@@ -631,7 +632,6 @@ export default class FlowDialog extends Dialog {
     };
     this._addFlowHandler(loopPath, compiledLoop);
 
-    assert(isArray(doFlow));
     doFlow.push(compiledIncrement);
 
     this._compileFlow(doFlow, doPath, {
