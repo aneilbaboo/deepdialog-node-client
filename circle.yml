@@ -1,9 +1,20 @@
-## Customize the test machine
 machine:
-
-  # Version of node to use
+  environment:
+    PATH: "${PATH}:${HOME}/${CIRCLE_PROJECT_REPONAME}/node_modules/.bin"
   node:
     version: 8.1.2
 
 
+dependencies:
+  override:
+    - yarn
+  cache_directories:
+    - ~/.cache/yarn
 
+test:
+  override:
+    - yarn test
+
+
+
+  
