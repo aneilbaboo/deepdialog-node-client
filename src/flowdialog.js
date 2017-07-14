@@ -1383,7 +1383,7 @@ export function deleteUndefinedKeys(o) {
 //
 
 export function isValidFlowId(id) {
-  return isString(id) && /^[#]?[^\.#:|\r\n]+$/.test(id);
+  return isNumber(id) || (isString(id) && /^[#]?[^\.#:|\r\n]+$/.test(id));
 }
 
 export function appendFlowPathId(path, ...ids) {
@@ -1393,7 +1393,7 @@ export function appendFlowPathId(path, ...ids) {
       throw new Error(`Invalid flow id (${id}). Ids must start with a `+
       `word character or # and must not contain periods or colons.`);
     }
-    return (id.startsWith('#')) ? [id] : [...path, id];
+    return (isString(id) && id.startsWith('#')) ? [id] : [...path, id];
   } else {
     var result= appendFlowPathId(appendFlowPathId(path, id), ...rest);
     return result;

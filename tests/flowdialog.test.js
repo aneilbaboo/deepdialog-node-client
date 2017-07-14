@@ -310,6 +310,20 @@ describe('FlowScript', function () {
           '#d'
         ]);
       });
+      it('should handle number ids', function () {
+        expect(appendFlowPathId(['a','b'], 0)).to.deep.equal([
+          'a','b',0
+        ]);
+        expect(appendFlowPathId(['a','b'], 0, 'c')).to.deep.equal([
+          'a','b',0,'c'
+        ]);
+        expect(appendFlowPathId(['a','b'], 1)).to.deep.equal([
+          'a','b',1
+        ]);
+        expect(appendFlowPathId(['a','b'], 1, 'c')).to.deep.equal([
+          'a','b',1,'c'
+        ]);
+      });
     });
 
     context('flowPathFromKey', function () {
@@ -323,6 +337,7 @@ describe('FlowScript', function () {
         expect(()=>flowPathFromKey(['a','b'])).to.throw();
         expect(()=>flowPathFromKey(1)).to.throw();
       });
+
     });
 
     context('flowIdToText', function () {
@@ -891,6 +906,7 @@ describe('FlowScript', function () {
         expect(dialog.flowKey(['a'])).to.equal('TestDialog:a');
         expect(dialog.flowKey(['a','b','c'])).to.equal('TestDialog:a.b.c');
         expect(dialog.flowKey(['a','b','#c'])).to.equal('TestDialog:#c');
+        expect(dialog.flowKey(['a','b',0])).to.equal('TestDialog:a.b.0');
       });
 
       it('should return a flowKey given a string missing the dialog name', function () {
@@ -1545,6 +1561,38 @@ describe('FlowScript', function () {
           expect(case1Stub.callCount).to.equal(1);
           expect(case2Stub.callCount).to.equal(2);
           expect(case3Stub.callCount).to.equal(3);
+        });
+
+        it('should handle number cases', async function () {
+          var case0Stub = sinon.stub();
+          var case1Stub = sinon.stub();
+          var case2Stub = sinon.stub();
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var handler = dialog._compileFlow({
+            switch: ({a})=>a,
+            cases: {
+              0: case0Stub,
+              1: case1Stub,
+              2: case2Stub
+            }
+          },
+          ['onStart'],
+          {}); // no options
+
+          await handler({a:0},'the-session',[]);
+          expect(case0Stub.callCount).to.equal(1);
+          expect(case1Stub.callCount).to.equal(1);
+          expect(case2Stub.callCount).to.equal(1);
+
+          await handler({a:1},'the-session',[]);
+          expect(case0Stub.callCount).to.equal(1);
+          expect(case1Stub.callCount).to.equal(2);
+          expect(case2Stub.callCount).to.equal(2);
+
+          await handler({a:2},'the-session',[]);
+          expect(case0Stub.callCount).to.equal(1);
+          expect(case1Stub.callCount).to.equal(2);
+          expect(case2Stub.callCount).to.equal(3);
         });
 
         it('should execute the default flow if no matching cases are found', async function () {
