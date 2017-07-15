@@ -80,10 +80,10 @@ function syncExpandCommandParam(param, vars) {
 function handlerPropertyProxy(handler) {
   return new Proxy(handler, {
     get (target, property) {
-      if (property=='call') {
+      if (typeof(property)=='symbol' || property=='call') {
         return target[property];
-      } else if (property=='toJSON') {
-        return target.toString;
+      } else if (property=='toJSON' || property=='toString') {
+        return ()=>'$.?';
       } else if (property.startsWith('$')) {
         let opName = property.slice(1);
         // it's a function call
