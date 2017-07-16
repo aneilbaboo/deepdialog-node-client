@@ -1,8 +1,10 @@
+import sinon from 'sinon';
 import chai, {expect} from 'chai';
 import chaiMatchPattern from 'chai-match-pattern';
 chai.use(chaiMatchPattern);
 
 import {$} from '../src/dollar-operator';
+
 
 context('$ operator', function () {
   it('should return a handler which extracts the value of the property from the vars', function () {
@@ -138,6 +140,23 @@ context('$ operator', function () {
 
     it('should correctly perform pow', function () {
       expect($.a.b.$pow(3)({a:{b:2}})).to.equal(8);
+    });
+
+    it('should not raise an error when logged or stringified', function () {
+      expect(()=>console.log($.a)).to.not.throw(); // eslint-disable-line
+      expect(()=>JSON.stringify($.a)).to.not.throw();
+    });
+
+    it('should not evaluate the expression when stringified', function () {
+      var stub = sinon.stub();
+      JSON.stringify($.a.$(stub));
+      expect(stub.notCalled).to.be.ok;
+    });
+
+    it('should not evaluate the expression when logged', function () {
+      var stub = sinon.stub();
+      console.log("logging dollar operator %j", $.a.$(stub)); // eslint-disable-line
+      expect(stub.notCalled).to.be.ok;
     });
   });
 });
