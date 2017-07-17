@@ -227,6 +227,11 @@ export default class FlowDialog extends Dialog {
           if (e.break) {
             await this.startFlow(options.breakFlow, session);
             break;
+          } else if (e.continue) {
+            await this.startFlow(options.continueFlow, session);
+            break;
+          } else {
+            throw e;
           }
         }
         // session vars may have changed
@@ -277,6 +282,7 @@ export default class FlowDialog extends Dialog {
         case 'exec': return this._compileExecCommand(cmd, path, options);
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
+        case 'continue': return this._compileIterationContinue(cmd, path, options);
         default: throw new Error(`Failed while compiling unrecognized command: ${JSON.stringify(cmd)} at ${this.flowKey(path)}`);
       }
     }
@@ -617,6 +623,7 @@ export default class FlowDialog extends Dialog {
     var doPath = appendFlowPathId(path, id, 'do');
     var loopPath = appendFlowPathId(path, id, 'loop'); // includes the condition
     var endPath = appendFlowPathId(path, id, 'end');
+    var continuePath = appendFlowPathId(path, id, 'continue');
 
     doFlow = isArray(doFlow) ? doFlow : [doFlow];
 
@@ -632,12 +639,18 @@ export default class FlowDialog extends Dialog {
     };
     this._addFlowHandler(loopPath, compiledLoop);
 
+    this._compileFlow(compiledIncrement, continuePath, {
+      ...options,
+      nextFlow: loopPath
+    });
+
     doFlow.push(compiledIncrement);
 
     this._compileFlow(doFlow, doPath, {
       ...options,
       nextFlow: loopPath,
-      breakFlow: endPath
+      breakFlow: endPath,
+      continueFlow: continuePath
     });
 
     this._compileFlow([], endPath, options); // could eventually put a finally block here
@@ -717,6 +730,17 @@ export default class FlowDialog extends Dialog {
     }
 
     return function () { throw breakError; };
+  }
+
+  _compileIterationContinue(cmd, path, options) {
+    var continueFlow = options.continueFlow;
+    var continueError = new Error(`Invalid break encountered at ${this.flowKey(path)}`);
+    continueError.continue = true;
+    if (!continueFlow) {
+      throw continueError;
+    }
+
+    return function () { throw continueError; };
   }
 
   _compileStartCommand(cmd, path, options) {
@@ -1271,6 +1295,7 @@ export function isFlowBreaker(cmd) {
       cmd.type=='iteration' ||
       cmd.type=='start' ||
       cmd.type=='break' ||
+      cmd.type=='continue' ||
       cmd.type=='finish' ||
       (
         isMessageType(cmd.type) && (
@@ -1358,6 +1383,8 @@ export function inferCommandType(command) {
     return 'iteration';
   } else if (command.break) {
     return 'break';
+  } else if (command.continue) {
+    return 'continue';
   }
 }
 

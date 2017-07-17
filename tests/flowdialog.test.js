@@ -881,7 +881,6 @@ describe('FlowScript', function () {
 
   });
 
-
   describe('FlowDialog', function () {
     context('constructor', function () {
       it('should have an onStart handler when provided a flow named onStart', function () {
@@ -1761,6 +1760,20 @@ describe('FlowScript', function () {
       });
 
       context('iteration command', function () {
+        it('break pseudo command should throw an error when called inside a regular flow', function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          expect(()=>dialog._compileFlow([
+            {break:true}
+          ])).to.throw();
+        });
+
+        it('continue pseudo command should throw an error when called inside a regular flow', function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          expect(()=>dialog._compileFlow([
+            {continue:true}
+          ])).to.throw();
+        });
+
         context('using for syntax,', function () {
           it('should install a handler which iterates the specified number of times', async function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
@@ -1848,6 +1861,38 @@ describe('FlowScript', function () {
             expect(session.vars).to.deep.equal({i:1});
           });
 
+          it('should continue iterating when it encounters a continue command', async function () {
+            var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+            var handler = dialog._compileFlow([
+              { for: [{i:1}, ({i})=>i<6, {i:2}],
+                do: [
+                  { if: ({i})=>i==3,
+                    then: { continue: true}
+                  },
+                  "Hello {{i}}"
+                ]
+              },
+              "Done!"
+            ], ['onStart']);
+            var events = [];
+            var session = {
+              vars: {},
+              async send(params) { events.push(params); },
+              async save(obj) {
+                this.vars = {...this.vars,...obj};
+              },
+              get globals() { return {}; },
+              get locals() { return this.vars; }
+            };
+
+            await handler({}, session);
+            expect(events).to.deep.equal([
+              {type: 'text', text: 'Hello 1'},
+              {type: 'text', text: 'Hello 5'},
+              {type: 'text', text: 'Done!'}
+            ]);
+          });
+
           context('when it contains a dialog start (i.e., flow breaking) command', function () {
             var dialog, events, session, onStartHandler;
             beforeEach(function () {
@@ -1920,6 +1965,7 @@ describe('FlowScript', function () {
             });
           });
         });
+
         context('using until syntax,', function () {
           it('should execute the until loop until the condition is true', async function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
