@@ -143,7 +143,7 @@ context('$ operator', function () {
     });
 
     it('should not raise an error when logged or stringified', function () {
-      expect(()=>console.log($.a)).to.not.throw(); // eslint-disable-line
+      expect(()=>console.log("Raw console.log($.a):", $.a)).to.not.throw(); // eslint-disable-line
       expect(()=>JSON.stringify($.a)).to.not.throw();
     });
 
@@ -155,7 +155,7 @@ context('$ operator', function () {
 
     it('should not evaluate the expression when logged', function () {
       var stub = sinon.stub();
-      console.log("logging dollar operator %j", $.a.$(stub)); // eslint-disable-line
+      console.log("console.log(%%j, $.a): %j", $.a.$(stub)); // eslint-disable-line
       expect(stub.notCalled).to.be.ok;
     });
   });
