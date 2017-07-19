@@ -773,7 +773,8 @@ export default class FlowDialog extends Dialog {
 
     return async (vars, session) => {
       var startParam = await this._expandCommandParam(compiledStartParam, vars, session, thenPath);
-      var [dialogName, args] = normalizeStartParam(startParam);
+      var [dialog, args] = normalizeStartParam(startParam);
+      var dialogName = dialog instanceof Dialog ? dialog.name : dialog;
       await session.start(dialogName, args, tag);
     };
   }
@@ -1236,7 +1237,7 @@ export function normalizeAction(id, action, defaultType) {
 }
 
 function normalizeStartParam(param) {
-  if (isString(param)) {
+  if (isString(param) || param instanceof Dialog) {
     return [param, undefined];
   } else if (isArray(param) && param.length==2) {
     return param;

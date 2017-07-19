@@ -1008,6 +1008,16 @@ describe('FlowScript', function () {
           expect(events).to.deep.equal(["MyDialog", undefined, undefined]);
         });
 
+        it('should call session.start with the provided dialog instance', async function () {
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+          var dialogInstance = new FlowDialog({name:"MyDialog"});
+          var topLevelHandler = dialog._compileFlow([
+            { start: dialogInstance }
+          ], ['onStart']);
+          await topLevelHandler({}, session);
+          expect(events).to.deep.equal(["MyDialog", undefined, undefined]);
+        });
+
         it('should call session.start with the provided dialog and args', async function () {
           var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
