@@ -34,8 +34,12 @@ export const dollarOperators = {
 function dollarOperatorHandler(target, opName) {
   if (opName.length==0) {
     return function(fn, ...args) {
+      if (isNumber(fn)) {
+        let index = fn;
+        fn = (value)=>value[index];
+      }
       if (!isFunction(fn)) {
-        throw new Error(`Expecting a function argument to dollar-accessor, but received .$(${fn})`);
+        throw new Error(`Expecting a function or number argument to dollar-accessor, but received .$(${fn})`);
       }
       return handlerPropertyProxy(function (vars) {
         var value = target(vars);

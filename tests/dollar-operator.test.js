@@ -39,6 +39,10 @@ context('$ operator', function () {
     expect($.a.b.$(testfn)({a:{b:"there"}})).to.equal("hello there");
   });
 
+  it('when given a number argument, should treat the number as an index', function () {
+    expect($.a.b.$(1)({a:{b:['hello','there','sailor']}})).to.equal("there");
+  });
+
   context('when using prebuilt operators', function () {
     it('should correctly perform gt test', function () {
       expect($.a.b.$gt(3)({a:{b:1}})).to.be.false;
