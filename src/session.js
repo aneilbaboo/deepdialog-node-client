@@ -42,7 +42,8 @@ export default class Session {
     assert(this.app.constructor==App, 'app must be an App instance');
     assert(this.id, 'invalid session id (.id)');
     assert(this.frameId, 'invalid stack frame id (.frameId)');
-    assert(this.dialog, 'invalid dialog (.dialogName)');
+    // this check doesn't work
+    // assert(this.dialog, 'invalid dialog (.dialog)');
     assert(this.globals, 'invalid globals (.globals)');
     assert(this.locals, 'invalid locals (.locals)');
   }

@@ -4,9 +4,9 @@
 
 FlowScript is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images and/or buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
 
-A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. A web server needs to implement methods to handle each interaction that makes up a conversation, and must provide a means of tracking the state of the conversation at each step.  This fragmentation of the flow makes it hard to visualize and manage conversational logic.
+A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. In FlowScript you script these interactions in the order they happen in a conversation. The FlowScript compiler generates methods in the bot web server that handle each interaction that makes up a conversation.
 
-In FlowScript you script conversational logic in the order it flows in a conversation. This frees you from worrying about low-level details where this logic ends up scattered over several separate controller methods, and where you are responsible for tracking and managing states yourself.  The FlowScript compiler generates server endpoints for you automatically, using the DeepDialog backend to track conversation state.  This means you can write your bot using familiar control flow structures, yet scale it like an ordinary web service.
+This frees you from worrying about low-level details and keeps your conversational logic in a readable form, instead of scattered over several separate controller methods.  The web server itself is [stateless](https://en.wikipedia.org/wiki/Service_statelessness_principle ) - all conversation state is stored in the DeepDialog backend.  This means you can write your bot using familiar control flow structures, yet scale it like a traditional web service.
 
 Dialogs and Sessions are the main building blocks of FlowScript.  Dialogs are analogous to functions: they contain program logic which is run on your bot server. Like functions, they take parameters when started and return a value on completion. The DeepDialog backend provides the storage for managing the dialog call stack, including local and global variables.  These capabilities are abstracted by the Session. Each session tracks the state of a conversation with an endpoint.  This is usually a user, but could be a chatroom.
 
@@ -68,7 +68,7 @@ export const ReadHoroscope = new FlowDialog({
           // if not, start a dialog to query for their sign
           start: "PickSign",
           then: {
-            if: $.value,
+            if: $.value, // the value returned by the PickSign dialog
             then: { set: {ZodiacSign: $.value } }
           }
         }
@@ -95,7 +95,7 @@ export const ReadHoroscope = new FlowDialog({
 
 ## FlowDialog
 
-To get started, you create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog starts.
+To get started, you create an instance of FlowDialog, and pass an object containing the dialog name and a flows parameter.  The `onStart` flow commences when the dialog is started.
 
 ```javascript
 import {FlowDialog} from 'deepdialog';
@@ -121,9 +121,23 @@ Each branch in the flow is given a unique name.  This is covered in  [Ids And Fl
 
 Top level flows are defined in the `flows` argument provided to the FlowDialog constructor.  When a FlowDialog starts, it automatically runs the special onStart flow.  Arguments provided to the dialog are also available in the first argument of handler functions, which are discussed below. The flows parameter also accepts other flows.  See the [Top Level Flows](#top-level-flows) section.
 
+### Starting a dialog
+
+1. Automatically
+
+  Each App has a required parameter, mainDialog. When a user interacts with the bot for the first time, a new session is created, and the dialog named by mainDialog is started.
+
+2. Explicitly
+
+  E.g., using the [start command](#start-command).
+
+  ```javascript
+  { start: ["MyDialog", {a:1, b:2} ] } // pass 2 arguments to MyDialog
+  ```
+
 ## Commands
 
-Commands are objects which have a type key.  For example, here is a command which sends a simple text message to the user:
+Commands are objects which appear in a flow.  For example, here is a command which sends a simple text message to the user:
 
 ```javascript
 {
@@ -131,10 +145,11 @@ Commands are objects which have a type key.  For example, here is a command whic
   text: "Hello!"
 }
 ```
+That's a bit wordy just to send a text message, so, the system supports abbreviations.  
 
 ### Abbreviation
 
-To improve readability, the developer can write abbreviated forms of some commands.  During compilation, the type of an abbreviation is inferred and the command is normalized to a standard form, a JS Object which always contains a `type` key.  
+To improve readability, the developer can write abbreviated forms of some commands.  During compilation, the abbreviated for is reduced to a normalized form.
 
 For example, strings are interpreted as simple text message commands. The following are all equivalent.  The last being the normal form:
 
@@ -154,14 +169,14 @@ import {FlowDialog} from 'deepdialog';
 export const HelloWorld = new FlowDialog({
   name: "HelloWorld",
   flows: {
-    onStart: "Hello, human!"
+    onStart: "Hello, human!" // instead of onStart: [ "Hello, human!"]
   }
 });
 ```
 
 ## Handlers
 
-Many elements in a flow tree can be substituted with a function called a handler. Handlers enable a developer to dynamically generate messages, action buttons, branch to other dialogs dynamically, or run arbitrary code.  Handlers make it easy to write highly dynamic, responsive conversational flows.
+Many elements in a flow tree can be substituted with a function called a handler. Handlers enable a developer to dynamically generate messages, action buttons, start dialogs, or run arbitrary code.  Handlers make it easy to write highly dynamic, responsive conversational flows.
 
 ### Command versus Value Handlers
 
@@ -186,7 +201,11 @@ Where,
 
 `vars` - an Object containing the variables associated with the session.
 `session` - the session object if you need low-level access to it.
-`path` - an array containing the ids identifying the current element.  
+`path` - an array containing the ids identifying the current element.
+
+In practice, the session and path arguments are often unused, so you will see expressions such as:
+
+
 
 #### Dollar operator
 
