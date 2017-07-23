@@ -44,8 +44,8 @@ describe('FlowScript', function () {
         expect(inferCommandType({text:'hi', mediaUrl:'http://a.com/img.png'})).to.equal('image');
       });
       it('should be falsey if neither mediaUrl or text are present', function () {
-        expect(inferCommandType({actions:[]})).to.be.falsey;
-        expect(inferCommandType({items:[]})).to.be.falsey;
+        expect(inferCommandType({actions:[]})).to.be.undefined;
+        expect(inferCommandType({items:[]})).to.be.undefined;
       });
       it('should be "start" if "start" key is present', function () {
         expect(inferCommandType({start:"MyDialog"})).to.equal('start');
@@ -152,7 +152,7 @@ describe('FlowScript', function () {
 
       it('should be falsey for non-command types', function () {
         ['postback','reply',[],1].forEach(type=>
-          expect(isCommandType(type)).to.be.falsey
+          expect(isCommandType(type)).to.be.false
         );
       });
     });
@@ -165,7 +165,7 @@ describe('FlowScript', function () {
       });
       it('should be false if the type is not an action type', function () {
         ['list', 'carousel','image',[],123].forEach(type=>
-          expect(isActionType(type)).to.be.falsey
+          expect(isActionType(type)).to.be.false
         );
       });
     });
@@ -670,8 +670,8 @@ describe('FlowScript', function () {
           condition: isFunction,
           do: "hello {{x}}"
         });
-        expect(normalForm.initializer).to.not.be.defined;
-        expect(normalForm.increment).to.not.be.defined;
+        expect(normalForm.initializer).to.be.undefined;
+        expect(normalForm.increment).to.be.undefined;
 
         // the condition flips the boolean in var x
         expect(normalForm.condition({x:true})).to.be.false;
@@ -689,8 +689,8 @@ describe('FlowScript', function () {
           condition: isFunction,
           do: "hello {{x}}"
         });
-        expect(normalForm.initializer).to.not.be.defined;
-        expect(normalForm.increment).to.not.be.defined;
+        expect(normalForm.initializer).to.be.undefined;
+        expect(normalForm.increment).to.be.undefined;
 
         // until should flip the boolean twice
         expect(await normalForm.condition({x:true})).to.be.ok;
@@ -936,7 +936,7 @@ describe('FlowScript', function () {
         var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
         var path = ['start'];
         var handler = dialog._compileFlow(["say a","say b","say c"],path);
-        expect(handler).to.be.a.function;
+        expect(handler).to.be.a('function');
         await handler({}, fakeSession);
         expect(sendParams).to.deep.equal([
           {type:'text',text:'say a'},
@@ -1330,8 +1330,8 @@ describe('FlowScript', function () {
               else:()=>{}
             }
           ], ['onStart']);
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.then')).to.be.a.function;
-          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.else')).to.be.a.function;
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.then')).to.be.a('function');
+          expect(dialog._getFlowHandler('TestFlowDialog:onStart.if.else')).to.be.a('function');
         });
 
         it('should run the then flow if literal arg to if: is truthy', async function () {

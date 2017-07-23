@@ -7,7 +7,7 @@ import {setPath} from './objpath';
 import {anyPattern} from './constants';
 import Dialog from './dialog';
 var util = require('./util'); // so we can stub sleep in tests
-import log from './log';
+import log, {stringify} from './log';
 
 //
 // Definitions
@@ -115,7 +115,7 @@ export default class FlowDialog extends Dialog {
    * @return {Function} returns a handler
    */
   _compileFlow(flow, path, options={}) {
-    log.silly('_compileFlow(%j,%j,%j)', flow, path, options);
+    log.ifsilly(()=>['_compileFlow(%s,%s,%s)', stringify(flow), stringify(path), stringify(options)]);
     flow = normalizeFlow(flow);
 
     var compiledCommands = [];
@@ -125,7 +125,7 @@ export default class FlowDialog extends Dialog {
     var addCompiledCommand = function (compiledCommand) {
       if (commandCount==0) {
         compiledCommands.push(async (vars, session)=>{
-          log.debug('%s begin (session:%s)', flowKey, session.id);
+          log.ifdebug(()=>['%s begin (session:%s)', stringify(flowKey), stringify(session.id)]);
           await compiledCommand(vars, session, path);
         });
       } else {
@@ -133,7 +133,9 @@ export default class FlowDialog extends Dialog {
       }
 
       if (commandCount==(flow.length-1)) {
-        compiledCommands.push((vars, session)=>log.debug('%s end (session:%s)', flowKey, session.id));
+        compiledCommands.push((vars, session)=>log.ifdebug(
+          ()=>['%s end (session:%s)', stringify(flowKey), stringify(session.id)]
+        ));
       }
       commandCount += 1;
     };
@@ -253,7 +255,7 @@ export default class FlowDialog extends Dialog {
    * @return {Object} An object mapping to handler functions
    */
   _compileFlows(flows, path, options={}) {
-    log.silly('_compileFlows(%j, %j, %j)', flows, path, options);
+    log.ifsilly(()=>['_compileFlows(%s, %s, %s)', stringify(flows), stringify(path), stringify(options)]);
     flows = normalizeFlows(flows);
     path = path || [];
     var result = {};
@@ -263,7 +265,7 @@ export default class FlowDialog extends Dialog {
       var handler = this._compileFlow(flow, flowPath, options);
       result[id] = handler;
     }
-    log.silly('_compileFlows(%j)=>', result);
+    log.ifsilly(()=>['_compileFlows(%s)=>', stringify(result)]);
     return result;
 
   }
@@ -283,7 +285,7 @@ export default class FlowDialog extends Dialog {
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
         case 'continue': return this._compileIterationContinue(cmd, path, options);
-        default: throw new Error(`Failed while compiling unrecognized command: ${JSON.stringify(cmd)} at ${this.flowKey(path)}`);
+        default: throw new Error(`Failed while compiling unrecognized command: ${stringify(cmd)} at ${this.flowKey(path)}`);
       }
     }
   }
@@ -349,7 +351,7 @@ export default class FlowDialog extends Dialog {
    * @return {Object} parameters suitable for session.send
    */
   _compileMessageCommand(command, path, options={}) {
-    log.silly('_compileMessageCommand(%j,%j)', command, path);
+    log.ifsilly(()=>['_compileMessageCommand(%s,%s)', stringify(command), stringify(path)]);
     var compiledParams = {
       ...command,
       actions: this._compileMessageActions(command.actions, path, options, 'reply'),
@@ -371,7 +373,7 @@ export default class FlowDialog extends Dialog {
         compiledParams, vars, session, path
       );
 
-      log.silly('_compileMessageCommand(',command,',',path,') final expansion =>', expandedParams);
+      log.ifsilly(()=>['_compileMessageCommand(%s,%s) final expansion => %s',stringify(command),stringify(path), stringify(expandedParams)]);
       await session.send(expandedParams);
 
       var {items,actions} = expandedParams;
@@ -420,7 +422,7 @@ export default class FlowDialog extends Dialog {
    * @return {Function} (vars, session) => Object
    */
   _compileMessageItems(items, path, options) {
-    log.silly('_compileMessageItems(%j, %j, %j)', items, path, options);
+    log.ifsilly(()=>['_compileMessageItems(%s, %s, %s)', stringify(items), stringify(path), stringify(options)]);
     if (isFunction(items)) {
       return async (vars, session)=>{
         var itemsArray = await items(vars, session, path);
@@ -459,7 +461,7 @@ export default class FlowDialog extends Dialog {
    * @return {type} Description
    */
   _compileMessageActions(actions, path, options, defaultType) {
-    log.silly('_compileMessageActions(%j, %j, %j, %j)', actions, path, options, defaultType);
+    log.ifsilly(()=>['_compileMessageActions(%s, %s, %s, %s)', stringify(actions), stringify(path), stringify(options), stringify(defaultType)]);
     if (isFunction(actions)) {
       return async (vars, session)=>{
         var resolvedActions = await actions(vars, session, path);
@@ -515,20 +517,20 @@ export default class FlowDialog extends Dialog {
         // add an onPostback or onPayload handler:
         switch (actionCopy.type) {
           case 'postback':
-            log.silly('_compileMessageActions adding postbackHandler at %j', actionFlowKey);
+            log.ifsilly(()=>['_compileMessageActions adding postbackHandler at %s', stringify(actionFlowKey)]);
             this.onPostback(actionFlowKey, async (session, args) => {
               await thenHandler(makeHandlerVars(session, args), session, path);
             });
             break;
           case 'reply':
-            log.silly('_compileMessageActions adding payloadHandler at %j', actionFlowKey);
+            log.ifsilly(()=>['_compileMessageActions adding payloadHandler at %s', stringify(actionFlowKey)]);
             this.onPayload(actionFlowKey, async (session) => {
               await thenHandler(makeHandlerVars(session), session, path);
             });
             break;
           default:
             throw new Error(`Invalid action: then and thenFlow may only be used with `+
-              `postback and reply type actions, but received: ${JSON.stringify(action)}`);
+              `postback and reply type actions, but received: ${stringify(action)}`);
         }
       }
 
@@ -595,11 +597,11 @@ export default class FlowDialog extends Dialog {
   }
 
   _compileConditionalCommand(cmd, path, options={}) {
-    log.silly('_compileConditionalCommand(%j,%j,%j)', cmd, path, options);
+    log.ifsilly(()=>['_compileConditionalCommand(%s,%s,%s)', stringify(cmd), stringify(path), stringify(options)]);
     var {id, if:test, then:thenFlow, else:elseFlow} = cmd;
     id = id || 'if';
     if (!thenFlow && !elseFlow) {
-      throw new Error(`Invalid if command %j must contain then or else flow`, cmd);
+      throw new Error(`Invalid if command ${stringify(cmd)} must contain then or else flow`);
     }
     var thenPath = appendFlowPathId(path, id, 'then');
     var elsePath = appendFlowPathId(path, id, 'else');
@@ -744,7 +746,7 @@ export default class FlowDialog extends Dialog {
   }
 
   _compileStartCommand(cmd, path, options) {
-    log.silly('_compileStartCommand(%j,%j,%j)',cmd,path,options);
+    log.ifsilly(()=>['_compileStartCommand(%s,%s,%s)',stringify(cmd),stringify(path),stringify(options)]);
     var {start, then} = cmd;
     var dialogName;
     var thenPath = appendFlowPathId(path, cmd.id, 'then');
@@ -780,9 +782,9 @@ export default class FlowDialog extends Dialog {
   }
 
   _finalizedAction(action, session) {
-    log.silly('_finalizedAction(%j)', action);
+    log.ifsilly(()=>['_finalizedAction(%s)', stringify(action)]);
     if (action.then) {
-      throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in %j`);
+      throw new Error(`Flows are not permitted in dynamically generated actions.  Use thenFlow instead of then in ${stringify(action)}`);
     }
 
     if (action.thenFlow) {
@@ -880,7 +882,7 @@ export default class FlowDialog extends Dialog {
       var reducedPath = appendFlowPathId([], ...path); // respects #id semantics
       return `${this.name}:${reducedPath.join(".")}`;
     }
-    throw new Error(`Invalid path ${path} provided to ${this.name}.flowKey.`);
+    throw new Error(`Invalid path ${stringify(path)} provided to ${this.name}.flowKey.`);
   }
 
   _getFlowHandler(path, strict=true) {
@@ -893,7 +895,7 @@ export default class FlowDialog extends Dialog {
   }
 
   _addFlowHandler(path, handler) {
-    log.silly('_addFlowHandler(%j, function(){...})', path);
+    log.ifsilly(()=>['_addFlowHandler(%s, function(){...})', stringify(path)]);
     var fkey = this.flowKey(path);
     if (this._flowHandlers[fkey]) {
       throw new Error(`Attempt to create handler with duplicate key: ${fkey}`);
@@ -920,21 +922,21 @@ export default class FlowDialog extends Dialog {
 //
 
 export function normalizeFlows(flows) {
-  log.silly('normalizeFlows(',flows,')');
+  log.ifsilly(()=>['normalizeFlows(%s)', stringify(flows)]);
   if (isPlainObject(flows)) {
     var normFlows = {};
     for (var id in flows) {
       normFlows[id] = normalizeFlow(flows[id]);
     }
   } else {
-    throw new Error(`Expecting an Object describing flows, but received: ${JSON.stringify(flows)}`);
+    throw new Error(`Expecting an Object describing flows, but received: ${stringify(flows)}`);
   }
   return normFlows;
 }
 
 export function normalizeFlow(flow) {
   if (isArray(flow)) {
-    log.silly('normalizeFlow(array: %j)', flow);
+    log.ifsilly(()=>['normalizeFlow(array: %s)', stringify(flow)]);
     return flow.map(normalizeFlowCommand);
   } else if (!flow) {
     return [];
@@ -977,11 +979,11 @@ export function normalizeFlowCommand(command) {
     }
   }
 
-  throw new Error(`Invalid command: ${JSON.stringify(command)}`);
+  throw new Error(`Invalid command: ${stringify(command)}`);
 }
 
 export function normalizeExecCommand(command) {
-  log.silly('normalizeExecCommand(%j)', command);
+  log.ifsilly(()=>['normalizeExecCommand(%s)', stringify(command)]);
   if (isString(command.exec)) {
     return { ...command, exec: [command.exec, {}]};
   } else if (isArray(command.exec)) {
@@ -992,12 +994,12 @@ export function normalizeExecCommand(command) {
 }
 
 export function normalizeSetCommand(command) {
-  log.silly('normalizeSetCommand(%j)', command);
+  log.ifsilly(()=>['normalizeSetCommand(%s)', stringify(command)]);
   return command;
 }
 
 export function normalizeConditionalCommand(command) {
-  log.silly('normalizeConditionalCommand(%j)', command);
+  log.ifsilly(()=>['normalizeConditionalCommand(%s)', stringify(command)]);
   if (command.hasOwnProperty('if')) {
     return {id: command.id || 'if', ...command};
   } else if (command.hasOwnProperty('when')) {
@@ -1019,7 +1021,7 @@ export function normalizeConditionalCommand(command) {
 }
 
 export function normalizeSwitchCommand(command) {
-  log.silly('normalizeSwitchCommand(%j)', command);
+  log.ifsilly(()=>['normalizeSwitchCommand(%s)', stringify(command)]);
   var cases = [];
 
   if (isPlainObject(command.cases)) {
@@ -1029,7 +1031,7 @@ export function normalizeSwitchCommand(command) {
   } else if (isArray(command.cases)) {
     cases = command.cases;
   } else {
-    throw new Error(`Switch command is missing cases key: ${JSON.stringify(command)}`);
+    throw new Error(`Switch command is missing cases key: ${stringify(command)}`);
   }
 
   return {
@@ -1042,7 +1044,7 @@ export function normalizeSwitchCommand(command) {
 }
 
 export function normalizeIterationCommand(command) {
-  log.silly('normalizeIterationCommand(%j)', command);
+  log.ifsilly(()=>['normalizeIterationCommand(%s)', stringify(command)]);
 
   if (command.while) {
     return {
@@ -1065,7 +1067,7 @@ export function normalizeIterationCommand(command) {
   // else if (command.forEach) {
   //   var initializer = command.forEach;
   //   if (!isPlainObject(initializer)) {
-  //     throw new Error(`Expecting a plain Object argument to forEach in ${JSON.stringify(command)}`);
+  //     throw new Error(`Expecting a plain Object argument to forEach in ${stringify(command)}`);
   //   }
   //   return {
   //     id: command.id || 'forEach',
@@ -1091,7 +1093,7 @@ export function normalizeIterationCommand(command) {
   } else if (command.condition && command.do) {
     return command;
   }
-  throw new Error(`Invalid iteration command: ${JSON.stringify(command)}`);
+  throw new Error(`Invalid iteration command: ${stringify(command)}`);
 }
 
 export function negateCondition(condition) {
@@ -1140,7 +1142,7 @@ export function normalizeIterationIncrement(initializer, increment) {
 }
 
 export function normalizeStartCommand(command) {
-  log.silly('normalizeStartCommand(%j)', command);
+  log.ifsilly(()=>['normalizeStartCommand(%s)', stringify(command)]);
   if (!isFunction(command.start)) {
     var [dialog, _] = normalizeStartParam(command.start);
   }
@@ -1149,7 +1151,7 @@ export function normalizeStartCommand(command) {
 }
 
 export function normalizeMessageCommand(command) {
-  log.silly('normalizeMessageCommand(%j)', command);
+  log.ifsilly(()=>['normalizeMessageCommand(%s)', stringify(command)]);
   var actions = command.actions ? normalizeActions(command.actions, 'reply') : undefined;
   var items = command.items ? normalizeItems(command.items) : undefined;
   var flows = command.flows ? normalizeFlows(command.flows) : undefined;
@@ -1158,7 +1160,7 @@ export function normalizeMessageCommand(command) {
 }
 
 export function normalizeItems(items) {
-  //log.silly('normalizeItems(%j)', items);
+  //log.ifsilly(()=>['normalizeItems(%j)', items]);
   if (isFunction(items)) {
     return items;
   } else if (isArray(items)) {
@@ -1180,7 +1182,7 @@ export function normalizeItems(items) {
   } else if (!items) {
     return undefined;
   } else {
-    throw new Error(`Expecting an Array or Object describing items, but received: ${JSON.stringify(items)}`);
+    throw new Error(`Expecting an Array or Object describing items, but received: ${stringify(items)}`);
   }
 }
 
@@ -1192,7 +1194,7 @@ export function normalizeItems(items) {
  * @return {Array} An object conforming to the action specification of the Session.send api
  */
 export function normalizeActions(actions, defaultType) {
-  log.silly('normalizeActions(%j,%j)', actions, defaultType);
+  log.ifsilly(()=>['normalizeActions(%s,%s)', stringify(actions), stringify(defaultType)]);
   if (isArray(actions)) {
     return actions.map(action=>normalizeAction(action.id, action, defaultType));
   } else if (isPlainObject(actions)) {
@@ -1210,12 +1212,12 @@ export function normalizeActions(actions, defaultType) {
   } if (!actions) {
     return undefined;
   } else {
-    throw new Error(`Expecting an Array or Object describing actions, but received: ${JSON.stringify(actions)}`);
+    throw new Error(`Expecting an Array or Object describing actions, but received: ${stringify(actions)}`);
   }
 }
 
 export function normalizeAction(id, action, defaultType) {
-  log.silly('normalizeAction(%j, %j, %j)', id, action, defaultType);
+  log.ifsilly(()=>['normalizeAction(%s, %s, %s)', stringify(id), stringify(action), stringify(defaultType)]);
   if (isAction(action)) {
     var type = action.type || inferActionType(action, defaultType);
     return deleteUndefinedKeys({
@@ -1232,7 +1234,7 @@ export function normalizeAction(id, action, defaultType) {
       then: normalizeFlow(action)
     };
   } else {
-    throw new Error(`Unable to normalize action ${JSON.stringify(action)} for id:${id}`);
+    throw new Error(`Unable to normalize action ${stringify(action)} for id:${id}`);
   }
 }
 
@@ -1268,7 +1270,7 @@ export function commandId(cmd, strict) {
     id = cmd.id;
   }
   if (!id && strict) {
-    var cmdStr = isFunction(cmd) ? cmd.toString() : JSON.stringify(cmd);
+    var cmdStr = isFunction(cmd) ? cmd.toString() : stringify(cmd);
     throw new Error(
       `Command following a flow breaking command must have an id `+
       `or handler must be a named function: ${cmdStr}`
