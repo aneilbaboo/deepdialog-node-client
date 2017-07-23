@@ -37,7 +37,7 @@
     "babel-plugin-transform-runtime": "6.x.x",
     "babel-preset-es2015": "6.x.x",
     "caniuse-lite": "1.0.30000697",
-    "chai": "3.5.0",
+    "chai": "^4.1.0",
     "chai-match-pattern": "1.0.0",
     "dotenv": "2.0.0",
     "electron-to-chromium": "1.3.15",

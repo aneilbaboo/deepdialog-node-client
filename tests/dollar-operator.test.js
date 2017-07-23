@@ -8,20 +8,20 @@ import {$} from '../src/dollar-operator';
 
 context('$ operator', function () {
   it('should return a handler which extracts the value of the property from the vars', function () {
-    expect($.myVar).to.be.a.function;
+    expect($.myVar).to.be.a('function');
     expect($.myVar({myVar:1})).to.equal(1);
     expect($.myVar({})).to.be.undefined;
   });
 
   it('should return a handler which extracts properties recursively', function () {
-    expect($.a.b.c.d).to.be.a.function;
+    expect($.a.b.c.d).to.be.a('function');
     var vars = {a:{b:{c:{d:123}}}};
     expect($.a.b.c.d(vars)).to.equal(123);
     expect($.a.b(vars)).to.deep.equal({c:{d:123}});
   });
 
   it('should return a handler which attempts to call a method if the property starts with $', function () {
-    expect($.a.$toLowerCase()).to.be.a.function;
+    expect($.a.$toLowerCase()).to.be.a('function');
     expect($.a.$toLowerCase()({a:"HELLO"})).to.equal("hello");
     expect($.a.b.$toLowerCase()({a:{b:"HELLO"}})).to.equal("hello");
   });
