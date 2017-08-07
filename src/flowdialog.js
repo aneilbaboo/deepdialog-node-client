@@ -68,7 +68,7 @@ import log, {stringify} from './log';
 
 
 /**
-* FlowDialog - Allows users to script flows. See the [documentation on github](https://github.com/aneilbaboo/deepdialog-node-client/blob/aneil/flowDialog/docs/flowscript.md)
+* FlowDialog - Allows users to script flows. See the [documentation on github](https://github.com/aneilbaboo/deepdialog-node-client/blob/aneil/flowDialog/docs/scripting.md)
 * @extends Dialog
 */
 export default class FlowDialog extends Dialog {

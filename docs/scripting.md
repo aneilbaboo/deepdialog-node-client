@@ -1,14 +1,14 @@
-# FlowScript
+# DeepDialog Scripting Language
 
 ## Overview
 
-FlowScript is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images and/or buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
+The DeepDialog Script (DDS) is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images and/or buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
 
-A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. In FlowScript you script these interactions in the order they happen in a conversation. The FlowScript compiler generates methods in the bot web server that handle each interaction that makes up a conversation.
+A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. In DDS you write these interactions in the order they happen in a conversation. The script compiler generates methods in the bot web server that handle each interaction that makes up a conversation.
 
 This frees you from worrying about low-level details and keeps your conversational logic in a readable form, instead of scattered over several separate controller methods.  The web server itself is [stateless](https://en.wikipedia.org/wiki/Service_statelessness_principle ) - all conversation state is stored in the DeepDialog backend.  This means you can write your bot using familiar control flow structures, yet scale it like a traditional web service.
 
-Dialogs and Sessions are the main building blocks of FlowScript.  Dialogs are analogous to functions: they contain program logic which is run on your bot server. Like functions, they take parameters when started and return a value on completion. The DeepDialog backend provides the storage for managing the dialog call stack, including local and global variables.  These capabilities are abstracted by the Session. Each session tracks the state of a conversation with an endpoint.  This is usually a user, but could be a chatroom.
+Dialogs and Sessions are the main building blocks of DDS.  Dialogs are analogous to functions: they contain program logic which is run on your bot server. Like functions, they take parameters when started and return a value on completion. The DeepDialog backend provides the storage for managing the dialog call stack, including local and global variables.  These capabilities are abstracted by the Session. Each session tracks the state of a conversation with an endpoint.  This is usually a user, but could be a chatroom.
 
 In practical terms, a flow is a Javascript Array, and commands are Javascript Objects or functions.  This means a developer can generate flows programmatically.  Parts of the conversation can be generated dynamically by replacing part of the conversation tree with a function.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  If you need to, you can also access the DeepDialog API directly using a function placed inside a flow. See the documentation [here](./index.md).
 
@@ -295,7 +295,7 @@ Note that strings returned by handlers will not be interpolated.  Within a handl
 
 ## Command Types
 
-The most basic kind of command is sending a message to the user.  FlowScript provides commands for each of the message types supported by the DeepDialog API's messageSend endpoint.  
+The most basic kind of command is sending a message to the user.  DScript provides commands for each of the message types supported by the DeepDialog API's messageSend endpoint.  
 
 ### text Command
 
