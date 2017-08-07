@@ -23,7 +23,7 @@ import FlowDialog, {
 } from '../src/flowdialog';
 import {$} from '../src/dollar-operator';
 
-describe('FlowScript', function () {
+describe('DeepDialog Script', function () {
   var sandbox;
 
   beforeEach(function () {

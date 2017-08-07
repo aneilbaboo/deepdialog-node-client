@@ -4,9 +4,9 @@
 
 DeepDialog helps you write more sophisticated chatbots.  Currently, you can connect to Facebook, Twitter, WhatsApp, Kik and many other services through Smooch.io.  
 
-## FlowScript
+## DeepDialog Script
 
-[FlowScript](./flowscript.md) is a high level language that makes it easy to script conversational flows.  The rest of this document explains how the DeepDialog service works and describes the core service objects.
+[DDS](./scripting.md) is a high level language that makes it easy to script conversational flows.  The rest of this document explains how the DeepDialog service works and describes the core service objects.
 
 ### Dialogs: Functions for Conversational Logic
 

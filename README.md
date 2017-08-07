@@ -7,7 +7,7 @@ Bot building superpowers.
 ## Documentation
 
 * [How it Works](docs/index.md)
-* [FlowScript](docs/flowscript.md)
+* [The DeepDialog Scripting Language](docs/scripting.md)
 
 ## Example
 
@@ -81,7 +81,7 @@ Step by step instructions - or checkout the starter bot:
 
 #### 1. Write Dialogs
 
-Checkout the [FlowScript](docs/flowscript.md) for a high-level approach
+Checkout [DeepDialog Script](docs/scripting.md) for a high-level approach
 to writing dynamic conversations.
 
 ```javascript
