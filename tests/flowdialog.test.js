@@ -721,7 +721,7 @@ describe('FlowScript', function () {
 
       it('should expand functions in a provided object', async function() {
         expect(await dialog._expandSetParam({a:()=>1, b:2, c:$.z}, {z:3})).to.deep.equal({
-          a:1, b:2, c:3
+          a:1, b:2, c:3, z:3
         });
       });
 
@@ -1223,9 +1223,9 @@ describe('FlowScript', function () {
           var handler = dialog._compileFlow([
             {set:()=>({"a.b.c":1, "a.b.d":2, "a.e":3 })}
           ], ['onStart']);
-          await handler({}, session, []);
+          await handler({a:{x:1, b:{x:2}} }, session, []);
           expect(session.save.withArgs(
-            sinon.match({a:{b:{c:1, d:2}, e:3}})
+            sinon.match({a:{x:1, b:{c:1, d:2, x:2}, e:3}})
           ).calledOnce).to.be.true;
         });
 

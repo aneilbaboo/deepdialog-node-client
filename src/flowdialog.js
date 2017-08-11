@@ -317,7 +317,7 @@ export default class FlowDialog extends Dialog {
 
   async _expandSetParam(params, vars, session, path) {
     var expandedVars = await this._expandCommandParam(params, vars, session, path);
-    var processedVars = {};
+    var processedVars = {...vars};
     const destructureRegex = /\{([\s\w,]*)}/;
 
     for (let v in expandedVars) {
