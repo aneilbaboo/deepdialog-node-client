@@ -539,22 +539,22 @@ Set session variables
     zip: "19886"
   }
 }
-
-// alternatively, use a handler:
-{ // assuming this db method returns a JS Object:
-  // note: this doesn't set userId.  The handler uses userId to
-  // retrieve an object containing key-value pairs.  It is these
-  // returned key-value pairs which will be set.
-  async set({userId}) {return await db.getUserAddress(userId); }
-}
-
 // shorthand for setting a deep attribute
 // child objects are created automatically
 // existing keys in parent objects are retained:
 { set: {"user.home.address": "420 Paper St."}}
 
+// sequential assignment
+{ set: {
+  a: 1,
+  b: $.a.$add(1),
+  c: $.b.$mul(3)
+} } // sets a:1, b:2, c:6
+
+// set global value
 { set: { GlobalVariable: 123 }}
 
+// set volatile
 { set: { _volatileVariable: computeLargeResult }}
 
 // destructuring functionality can be useful

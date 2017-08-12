@@ -1203,25 +1203,26 @@ describe('FlowScript', function () {
           ).calledOnce).to.be.true;
         });
 
-        it('should call session save with the handler value to set', async function () {
-          var session = { save: sinon.stub() };
-          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-
-          var handler = dialog._compileFlow([
-            {set:()=>({b:1})}
-          ], ['onStart']);
-          await handler({}, session, []);
-          expect(session.save.withArgs(
-            sinon.match({b:1})
-          ).calledOnce).to.be.true;
-        });
+        // don't support this for now
+        // it('should call session save with the handler value to set', async function () {
+        //   var session = { save: sinon.stub() };
+        //   var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+        //
+        //   var handler = dialog._compileFlow([
+        //     {set:()=>({b:1})}
+        //   ], ['onStart']);
+        //   await handler({}, session, []);
+        //   expect(session.save.withArgs(
+        //     sinon.match({b:1})
+        //   ).calledOnce).to.be.true;
+        // });
 
         it('should call session save, automatically generating objects in a path', async function () {
           var session = { save: sinon.stub() };
           var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
 
           var handler = dialog._compileFlow([
-            {set:()=>({"a.b.c":1, "a.b.d":2, "a.e":3 })}
+            {set:{"a.b.c":1, "a.b.d":2, "a.e":3 }}
           ], ['onStart']);
           await handler({a:{x:1, b:{x:2}} }, session, []);
           expect(session.save.withArgs(
@@ -1239,6 +1240,23 @@ describe('FlowScript', function () {
           await handler({}, session, []);
           expect(session.save.withArgs(
             sinon.match({a:1, c:3})
+          ).calledOnce).to.be.true;
+        });
+
+        it('should perform assignment sequentially', async function () {
+          var session = { save: sinon.stub() };
+          var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+
+          var handler = dialog._compileFlow([
+            { set: {
+              a: 1,
+              b: ({a})=>a+1,
+              c: ({b})=>b+1
+            } }
+          ], ['onStart']);
+          await handler({}, session, []);
+          expect(session.save.withArgs(
+            sinon.match({a:1, b:2, c:3})
           ).calledOnce).to.be.true;
         });
 
