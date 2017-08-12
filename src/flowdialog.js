@@ -125,7 +125,7 @@ export default class FlowDialog extends Dialog {
     var addCompiledCommand = function (compiledCommand) {
       if (commandCount==0) {
         compiledCommands.push(async (vars, session)=>{
-          log.ifdebug(()=>['%s begin (session:%s)', stringify(flowKey), stringify(session.id)]);
+          log.ifdebug(()=>['<BEGIN> %s (session:%s)', stringify(flowKey), stringify(session.id)]);
           await compiledCommand(vars, session, path);
         });
       } else {
@@ -134,7 +134,7 @@ export default class FlowDialog extends Dialog {
 
       if (commandCount==(flow.length-1)) {
         compiledCommands.push((vars, session)=>log.ifdebug(
-          ()=>['%s end (session:%s)', stringify(flowKey), stringify(session.id)]
+          ()=>['<END> %s (session:%s)', stringify(flowKey), stringify(session.id)]
         ));
       }
       commandCount += 1;
@@ -307,25 +307,25 @@ export default class FlowDialog extends Dialog {
     };
   }
 
-  async _expandSetParam(params, vars, session, path) {
-    var expandedVars = await this._expandCommandParam(params, vars, session, path);
+  async _expandSetParam(params, vars) {
     var processedVars = {...vars};
     const destructureRegex = /\{([\s\w,]*)}/;
 
-    for (let v in expandedVars) {
+    for (let v in params) {
+      let expandedValue = await this._expandCommandParam(params[v], processedVars);
       let destructureMatch = destructureRegex.exec(v);
       if (destructureMatch) {
-        let expanded = expandedVars[v];
         let destructuredVars = destructureMatch[1].split(",").map(s=>s.trim()).filter(s=>s.length>0);
         for (let dvar of destructuredVars) {
-          processedVars[dvar] = expanded[dvar];
+          processedVars[dvar] = expandedValue[dvar];
         }
       } else {
-        setPath(processedVars, v, expandedVars[v]);
+        setPath(processedVars, v, expandedValue);
       }
     }
     return processedVars;
   }
+
   _compileWaitCommand(cmd, path) {
     return async (vars,session) => {
       var seconds = await this._expandCommandParam(cmd.wait, vars, session, path);
