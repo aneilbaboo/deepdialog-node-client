@@ -43,6 +43,22 @@ context('$ operator', function () {
     expect($.a.b.$(1)({a:{b:['hello','there','sailor']}})).to.equal("there");
   });
 
+  context.only('when using $and', function () {
+    it.only('should return false if the first value is falsey', function () {
+      debugger;
+      expect($.a.$and.b.$and.c({a:false,b:'b',c:'c'})).to.be.false;
+    });
+    it('should return false if the second value is falsey', function () {
+      expect($.a.$and.b.$and.c({a:'a',b:false,c:'c'})).to.be.false;
+    });
+    it('should return false if the last value is falsey', function () {
+      expect($.a.$and.b.$and.c({a:'a',b:'b',c:false})).to.be.false;
+    });
+    it('should return the final value if all values are truthy', function () {
+      expect($.a.$and.b.$and.c({a:'a',b:'b',c:'c'})).to.equal('c');
+    });
+  });
+
   context('when using prebuilt operators', function () {
     it('should correctly perform gt test', function () {
       expect($.a.b.$gt(3)({a:{b:1}})).to.be.false;

@@ -32,7 +32,7 @@ export const dollarOperators = {
 };
 
 function dollarOperatorHandler(target, opName) {
-  if (opName.length==0) {
+  if (opName.length==0) { // $.myvar.$(...)
     return function(fn, ...args) {
       if (isNumber(fn)) {
         let index = fn;
@@ -46,16 +46,34 @@ function dollarOperatorHandler(target, opName) {
         return fn(value, ...args);
       });
     };
-  } else {
+  } else if (opName=='and') {
+    return handlerPropertyProxy(function (vars) {
+      let value = target(vars);
+      if (value) {
+        return $;
+      } else {
+        return ()=>false;
+      }
+    });
+  } else if (opName=='or') {
+    return handlerPropertyProxy(function (vars) {
+      let value = target(vars);
+      if (value) {
+        return value;
+      } else {
+        return $;
+      }
+    });
+  } else { // $.myvar.$___(...)
     return function (...args) {
       return handlerPropertyProxy(function (vars) {
         var value = target(vars);
         args = syncExpandCommandParam(args, vars);
-        // class method - e.g., string.toLowerCase
+        // class method - e.g., string.$toLowerCase
         if (value && isFunction(value[opName])) {
           return value[opName](...args);
         } else {
-          // dollar operators
+          // dollar operators $.mynum.$gte(3)
           var op = dollarOperators[opName];
           if (op) {
             return op(value, ...args);
