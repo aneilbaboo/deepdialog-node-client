@@ -280,7 +280,6 @@ export default class FlowDialog extends Dialog {
         case 'switch': return this._compileSwitchCommand(cmd, path, options);
         case 'wait': return this._compileWaitCommand(cmd, path, options);
         case 'set': return this._compileSetCommand(cmd, path, options);
-        case 'setv': return this._compileSetVCommand(cmd, path, options);
         case 'exec': return this._compileExecCommand(cmd, path, options);
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
@@ -305,13 +304,6 @@ export default class FlowDialog extends Dialog {
     return async (vars, session) => {
       var expandedParams = await this._expandSetParam(cmd.set, vars, session, path);
       await session.save(expandedParams);
-    };
-  }
-
-  _compileSetVCommand(cmd, path) {
-    return async (vars, session) => {
-      var expandedParams = await this._expandSetParam(cmd.setv, vars, session, path);
-      session.setv(expandedParams);
     };
   }
 
@@ -1366,8 +1358,6 @@ export function inferCommandType(command) {
     return 'wait';
   } else if (command.set) {
     return 'set';
-  } else if (command.setv) {
-    return 'setv';
   } else if (
     command.hasOwnProperty('if') ||
     command.hasOwnProperty('when') ||

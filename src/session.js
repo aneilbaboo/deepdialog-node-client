@@ -75,9 +75,13 @@ export default class Session {
    * @return {Object}
    */
   get(key) {
-    return this.volatiles.hasOwnProperty(key) ? this.volatiles[key] : (
-      this.locals.hasOwnProperty(key) ?
-      this.locals[key] : this.globals[key]);
+    if (this.volatiles.hasOwnProperty(key)) {
+      return this.volatiles[key];
+    } else if (this.locals.hasOwnProperty(key)) {
+      return this.locals[key];
+    } else {
+      return this.globals[key];
+    }
   }
 
   /**
@@ -92,26 +96,19 @@ export default class Session {
    */
   set(variableOrHash, value) {
     if (variableOrHash instanceof Object) {
-      for (let k in variableOrHash) {
-        this.set(k, variableOrHash[k]);
+      let varNames = variableOrHash;
+      for (let k in varNames) {
+        this.set(k, varNames[k]);
       }
     } else {
-      if (variableOrHash[0]==variableOrHash[0].toUpperCase()) {
-        this.globals[variableOrHash] = value;
+      let varName = variableOrHash;
+      if (varName[0]=="_") {
+        this.volatiles[varName] = value;
+      } else if (varName[0]==varName[0].toUpperCase()) {
+        this.globals[varName] = value;
       } else {
-        this.locals[variableOrHash] = value;
+        this.locals[varName] = value;
       }
-    }
-  }
-
-  // sets volatile variables - which do not persist between requests
-  setv(variableOrHash, value) {
-    if (variableOrHash instanceof Object) {
-      for (let k in variableOrHash) {
-        this.setv(k, variableOrHash[k]);
-      }
-    } else {
-      this.volatiles[variableOrHash] = value;
     }
   }
 
