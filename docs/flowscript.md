@@ -2,7 +2,7 @@
 
 ## Overview
 
-FlowScript is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images and/or buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
+FlowScript is a Node.js DSL that lets a chatbot developer write dynamic conversational flows. A flow is a sequence of commands for the bot to execute, such as sending messages with images, carousels and buttons, branching logic, loops and calling reusable conversational procedures, called dialogs.  
 
 A single flow might encompass several interactions with a user, mediated by several HTTP requests on the bot server occurring over minutes, hours or days. In FlowScript you script these interactions in the order they happen in a conversation. The FlowScript compiler generates methods in the bot web server that handle each interaction that makes up a conversation.
 
@@ -10,7 +10,7 @@ This frees you from worrying about low-level details and keeps your conversation
 
 Dialogs and Sessions are the main building blocks of FlowScript.  Dialogs are analogous to functions: they contain program logic which is run on your bot server. Like functions, they take parameters when started and return a value on completion. The DeepDialog backend provides the storage for managing the dialog call stack, including local and global variables.  These capabilities are abstracted by the Session. Each session tracks the state of a conversation with an endpoint.  This is usually a user, but could be a chatroom.
 
-In practical terms, a flow is a Javascript Array, and commands are Javascript Objects or functions.  This means a developer can generate flows programmatically.  Parts of the conversation can be generated dynamically by replacing part of the conversation tree with a function.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  If you need to, you can also access the DeepDialog API directly using a function placed inside a flow. See the documentation [here](./index.md).
+In practical terms, a flow is a Javascript Array, and commands are Javascript Objects or functions.  This means a developer can generate flows programmatically, and can intermingle Node.js code with FlowScript.  Conversation elements can be generated dynamically by replacing part of the conversation tree with a function.  For example, you can dynamically generate action buttons by providing a function to the `actions` parameter of a message command.  If you need to, you can also access the DeepDialog API directly using a `command` handler. See the documentation [here](#handlers).
 
 {% raw %}
 
@@ -125,11 +125,15 @@ Top level flows are defined in the `flows` argument provided to the FlowDialog c
 
 1. Automatically
 
-  Each App has a required parameter, mainDialog. When a user interacts with the bot for the first time, a new session is created, and the dialog named by mainDialog is started.
+   An App has a special "mainDialog" which is started automatically the first time a user interacts with the app. This is set using the mainDialog parameter of the App constructor.
+
+   ```javascript
+   new App({ name:'MyApp', mainDialog:'MyMainDialog', ... });
+   ```
 
 2. Explicitly
 
-  E.g., using the [start command](#start-command).
+   E.g., using the [start command](#start-command).
 
   ```javascript
   { start: ["MyDialog", {a:1, b:2} ] } // pass 2 arguments to MyDialog

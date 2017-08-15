@@ -7,6 +7,7 @@ import {setPath} from './objpath';
 import {anyPattern} from './constants';
 import Dialog from './dialog';
 var util = require('./util'); // so we can stub sleep in tests
+var closestLevensteinMatch = util.closestLevensteinMatch;
 import log, {stringify} from './log';
 
 //
@@ -881,7 +882,8 @@ export default class FlowDialog extends Dialog {
     var fkey = this.flowKey(path);
     var result = this._flowHandlers[fkey];
     if (!result && strict) {
-      throw new Error(`Attempt to access undefined flowHandler ${fkey}`);
+      var closestKey = closestLevensteinMatch(fkey, Object.keys(this._flowHandlers));
+      throw new Error(`Attempt to access undefined flowHandler ${fkey}. Did you mean ${closestKey}?`);
     }
     return result;
   }

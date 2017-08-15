@@ -1,6 +1,6 @@
 {
   "name": "deepdialog",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Node client for interacting with DeepDialog service",
   "engines": {
     "npm": "5.1.0",
@@ -58,6 +58,7 @@
     "compression": "1.6.2",
     "express": "4.14.0",
     "express-promise-router": "1.1.1",
+    "fast-levenshtein": "^2.0.6",
     "jwt-simple": "0.5.1",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
