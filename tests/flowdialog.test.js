@@ -41,7 +41,6 @@ describe('FlowScript', function () {
       });
       it('should be "image" if mediaUrl key is present', function () {
         expect(inferCommandType({mediaUrl:'http://a.com/img.png'})).to.equal('image');
-        expect(inferCommandType({text:'hi', mediaUrl:'http://a.com/img.png'})).to.equal('image');
       });
       it('should be falsey if neither mediaUrl or text are present', function () {
         expect(inferCommandType({actions:[]})).to.be.undefined;
@@ -72,6 +71,42 @@ describe('FlowScript', function () {
       it('should be "switch" if "switch" key is present', function () {
         expect(inferCommandType({switch:()=>{}})).to.equal("switch");
       });
+      it('should be "flow" if "flow" key is present', function () {
+        expect(inferCommandType({flow:[]})).to.equal('flow');
+      });
+    });
+
+    context('isCommandType', function () {
+      it('should be falsey for non command types', function () {
+        expect(isCommandType(null)).to.be.false;
+        expect(isCommandType("")).to.be.false;
+        expect(isCommandType("asdf")).to.be.false;
+      });
+      it('should be true for "text"', function () {
+        expect(isCommandType('text')).to.be.true;
+      });
+      it('should be true for "image"', function () {
+        expect(isCommandType('image')).to.be.true;
+      });
+      it('should be true for "start"', function () {
+        expect(isCommandType('start')).to.be.true;
+      });
+      it('should be true for "finish"', function () {
+        expect(isCommandType('finish')).to.be.true;
+      });
+      it('should be true for "wait"', function () {
+        expect(isCommandType('wait')).to.be.true;
+      });
+      it('should be true for "conditional"', function () {
+        expect(isCommandType('conditional')).to.be.true;
+      });
+      it('should be true for "switch"', function () {
+        expect(isCommandType('switch')).to.be.true;
+      });
+      it('should be true for "flow"', function () {
+        expect(isCommandType('flow')).to.be.true;
+      });
+
     });
 
     context('isFlowBreaker', function () {
@@ -154,6 +189,57 @@ describe('FlowScript', function () {
         ['postback','reply',[],1].forEach(type=>
           expect(isCommandType(type)).to.be.false
         );
+      });
+    });
+
+    context('explicit flow command', function () {
+      var events;
+
+      beforeEach(function () {
+        events=[];
+      });
+
+      it('should install a flow handler using the default id', async function () {
+        var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+        var session = { async send(params) { events.push(params); }};
+
+        var handler = dialog._compileFlow([
+          { flow: ["hello"] }
+        ], ['onStart']);
+
+        await handler({}, session, []);
+
+        expect(dialog._flowHandlers).to.include.key('TestFlowDialog:onStart.flow');
+        expect(events).to.deep.equal([{type:'text',text:'hello'}]);
+      });
+
+      it('should install a flow handler using a custom id', async function () {
+        var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+        var session = { async send(params) { events.push(params); }};
+
+        var handler = dialog._compileFlow([
+          { id:"#myflow", flow: ["hello"] }
+        ], ['onStart']);
+
+        await handler({}, session, []);
+
+        expect(dialog._flowHandlers).to.include.key('TestFlowDialog:#myflow');
+        expect(events).to.deep.equal([{type:'text',text:'hello'}]);
+      });
+
+
+      it('should install a flow handler with an auto-generated id after a flow breaker', async function () {
+        var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
+        var session = { async send(params) { events.push(params); }};
+        var handler = dialog._compileFlow([
+          { if: true, then: []},
+          { flow: ["hello"] }
+        ], ['onStart']);
+
+        await handler({}, session, []);
+
+        expect(dialog._flowHandlers).to.include.key('TestFlowDialog:onStart.flow1');
+        expect(events).to.deep.equal([{type:'text',text:'hello'}]);
       });
     });
 
@@ -436,6 +522,7 @@ describe('FlowScript', function () {
             }
           }
         })).to.deep.equal({
+          id: 'list',
           type: 'list',
           items: [
             {
@@ -461,13 +548,13 @@ describe('FlowScript', function () {
           id: 'the-id',
           text: 'the-id',
           type: 'reply',
-          then: [{type:'text', text:'this is a message'}]
+          then: [{id:'text', type:'text', text:'this is a message'}]
         });
         expect(normalizeAction('the-id',{text:'this is a message'}, 'reply')).to.deep.equal({
           id: 'the-id',
           text: 'the-id',
           type: 'reply',
-          then: [{type:'text', text:'this is a message'}]
+          then: [{id:'text', type:'text', text:'this is a message'}]
         });
         expect(normalizeAction('the-id',{type:'wait', seconds:5}, 'reply')).to.deep.equal({
           id: 'the-id',
@@ -593,33 +680,33 @@ describe('FlowScript', function () {
     context('normalizeFlow', function () {
       it('should convert a strings into a single message command', function () {
         expect(normalizeFlow("a")).to.deep.equal([
-          {type:'text', text:'a'}
+          {id:'text', type:'text', text:'a'}
         ]);
       });
 
       it('should convert a list of strings into message commands', function () {
         expect(normalizeFlow(["a","b","c"])).to.deep.equal([
-          {type:'text', text:'a'},
-          {type:'text', text:'b'},
-          {type:'text', text:'c'}
+          {id:'text', type:'text', text:'a'},
+          {id:'text', type:'text', text:'b'},
+          {id:'text', type:'text', text:'c'}
         ]);
       });
 
       it('should convert a command into an array containing the command', function () {
         expect(normalizeFlow({type:'text', text:'a'})).to.deep.equal([
-          {type:'text', text:'a'}
+          { id:'text', type:'text', text:'a' }
         ]);
       });
 
       it('should infer image type when mediaUrl is provided', function () {
         expect(normalizeFlow({mediaUrl:'http://imgur.com/someImage.jpg'})).to.deep.equal([
-          {type:'image', mediaUrl:'http://imgur.com/someImage.jpg'}
+          {id:'image', type:'image', mediaUrl:'http://imgur.com/someImage.jpg'}
         ]);
       });
 
       it('should infer text type when text is provided', function () {
         expect(normalizeFlow({text:'hello'})).to.deep.equal([
-          {type:'text', text:'hello'}
+          {id:'text', type:'text', text:'hello'}
         ]);
       });
     });
@@ -980,7 +1067,7 @@ describe('FlowScript', function () {
           await handler({a:1}, fakeSession, ['providedPath']);
           expect(events.sort(jsonSort)).to.deep.equal([
             {send:{type:'text', text:'dynamic-text'}},
-            {record: {path:['compiledPath'], vars:{a:1}}}
+            {record: {path:['compiledPath', 'text'], vars:{a:1}}}
           ].sort(jsonSort));
         });
 
@@ -1437,6 +1524,8 @@ describe('FlowScript', function () {
           ], ['onStart']);
 
           await handler({}, session, []);
+
+          expect(dialog._flowHandlers).to.include.key('TestFlowDialog:onStart.flow1');
 
           expect(events).to.deep.equal([
             { type: 'text', text: 'then' },
@@ -2092,13 +2181,13 @@ describe('FlowScript', function () {
             ]);
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
-              'TestFlowDialog:onStart.postback'
+              'TestFlowDialog:onStart.text.postback'
             );
             expect(dialog.postbackHandlers).to.have.keys(
-              'TestFlowDialog:onStart.postback'
+              'TestFlowDialog:onStart.text.postback'
             );
 
-            var postbackHandler = dialog._getFlowHandler('onStart.postback');
+            var postbackHandler = dialog._getFlowHandler('onStart.text.postback');
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await postbackHandler({a:1},session);
@@ -2128,7 +2217,7 @@ describe('FlowScript', function () {
               'onStart'
             ]);
 
-            var postbackHandler = dialog._getFlowHandler('onStart.postback');
+            var postbackHandler = dialog._getFlowHandler('onStart.text.postback');
             var events = [];
             var session = {
               async send(params) { events.push(params); },
@@ -2172,10 +2261,10 @@ describe('FlowScript', function () {
             ]);
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
-              'TestFlowDialog:onStart.reply'
+              'TestFlowDialog:onStart.text.reply'
             );
 
-            var [payloadHandler] = dialog.getInputHandler({payload:'TestFlowDialog:onStart.reply'});
+            var [payloadHandler] = dialog.getInputHandler({payload:'TestFlowDialog:onStart.text.reply'});
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await payloadHandler(session);
@@ -2201,7 +2290,7 @@ describe('FlowScript', function () {
               'onStart'
             ]);
 
-            var replyHandler = dialog._getFlowHandler('onStart.reply');
+            var replyHandler = dialog._getFlowHandler('onStart.text.reply');
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await flowHandler({a:1}, session);
@@ -2211,7 +2300,7 @@ describe('FlowScript', function () {
               {
                 type: 'text',
                 actions: [
-                  { type: 'reply', text: 'reply', payload: 'TestFlowDialog:onStart.reply'}
+                  { type: 'reply', text: 'reply', payload: 'TestFlowDialog:onStart.text.reply'}
                 ]
               },
 
@@ -2231,7 +2320,7 @@ describe('FlowScript', function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
             dialog._compileFlow([
               {
-                type: 'text',
+                type: 'carousel',
                 items: {
                   firstItem: {
                     actions: {
@@ -2245,13 +2334,13 @@ describe('FlowScript', function () {
             ]);
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
-              'TestFlowDialog:onStart.firstItem.postback'
+              'TestFlowDialog:onStart.carousel.firstItem.postback'
             );
             expect(dialog.postbackHandlers).to.have.keys(
-              'TestFlowDialog:onStart.firstItem.postback'
+              'TestFlowDialog:onStart.carousel.firstItem.postback'
             );
 
-            var postbackHandler = dialog._getFlowHandler('onStart.firstItem.postback');
+            var postbackHandler = dialog._getFlowHandler('onStart.carousel.firstItem.postback');
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await postbackHandler({a:1},session);
@@ -2266,7 +2355,7 @@ describe('FlowScript', function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
             dialog._compileFlow([
               {
-                type: 'text',
+                type: 'carousel',
                 items: {
                   firstItem: {
                     actions: {
@@ -2283,9 +2372,9 @@ describe('FlowScript', function () {
 
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
-              'TestFlowDialog:onStart.firstItem.postback'
+              'TestFlowDialog:onStart.carousel.firstItem.postback'
             );
-            var postbackHandler = dialog._getFlowHandler('onStart.firstItem.postback');
+            var postbackHandler = dialog._getFlowHandler('onStart.carousel.firstItem.postback');
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await postbackHandler({a:1},session);
@@ -2301,19 +2390,20 @@ describe('FlowScript', function () {
             var dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
             dialog._compileFlow([
               {
-                type: 'text',
+                type: 'list',
                 items: ()=> ([
                   {
                     id: 'firstItem',
                     actions: [
-                      { reply: { type: 'reply', thenFlow: '#flow2'} }
+                      { reply: { type: 'reply', thenFlow: '#myFlow'} }
                     ]
                   }
                 ]),
                 replyFlows: {
-                  "#flow2":  "Hello from flow2"
+                  "#myFlow":  "Hello from myFlow"
                 }
               },
+              // this point gets auto-id 'flow1'
               "this is",
               "the next flow"
             ], [
@@ -2321,18 +2411,18 @@ describe('FlowScript', function () {
             ]);
             expect(dialog._flowHandlers).to.have.keys(
               'TestFlowDialog:onStart',
-              'TestFlowDialog:#flow2',
-              'TestFlowDialog:onStart.@nextflow(1)' // replyFlows causes flow breaking
+              'TestFlowDialog:#myFlow',
+              'TestFlowDialog:onStart.flow1' // replyFlows causes flow breaking
             );
 
-            var replyHandler = dialog._getFlowHandler('TestFlowDialog:#flow2');
+            var replyHandler = dialog._getFlowHandler('TestFlowDialog:#myFlow');
             var events = [];
             var session = { async send(params) { events.push(params); } };
             await replyHandler({a:1},session);
 
             // postback handler doesn't trigger the next flow
             expect(events).to.deep.equal([
-              { type: 'text', text: 'Hello from flow2' },
+              { type: 'text', text: 'Hello from myFlow' },
               { type: 'text', text: 'this is' },
               { type: 'text', text: 'the next flow' }
             ]);
@@ -2515,12 +2605,10 @@ describe('FlowScript', function () {
 
         beforeEach(function () {
           dialog = new FlowDialog({name:"TestFlowDialog", flows: {}});
-
           topLevelHandler = dialog._compileFlow(
             [
               "Greetings!",
               {
-                type:'text',
                 text:'Is this what you want?',
                 actions: {
                   sure: [
@@ -2575,18 +2663,18 @@ describe('FlowScript', function () {
         it('the dialog should have the expected payload handlers', function (){
           var inputHandlerPatterns = dialog.inputHandlers.map(h=>h[0]).sort(jsonSort);
           expect(inputHandlerPatterns).to.deep.equal([
-            {payload:'TestFlowDialog:onStart.sure'},
-            {payload:'TestFlowDialog:onStart.sure.yes'},
-            {payload:'TestFlowDialog:onStart.sure.no'},
-            {payload:'TestFlowDialog:onStart.nah'},
-            {payload:'TestFlowDialog:onStart.askAgain'}
+            {payload:'TestFlowDialog:onStart.text.sure'},
+            {payload:'TestFlowDialog:onStart.text.sure.text.yes'},
+            {payload:'TestFlowDialog:onStart.text.sure.text.no'},
+            {payload:'TestFlowDialog:onStart.text.nah'},
+            {payload:'TestFlowDialog:onStart.text.askAgain'}
           ].sort(jsonSort));
         });
 
         it('the dialog should have the expected postback handlers', function () {
           expect(Object.keys(dialog.postbackHandlers).sort(jsonSort)).to.deep.equal([
-            'TestFlowDialog:onStart.sure.yes.cookies.order',
-            'TestFlowDialog:onStart.sure.yes.cream.order'
+            'TestFlowDialog:onStart.text.sure.text.yes.list.cookies.order',
+            'TestFlowDialog:onStart.text.sure.text.yes.list.cream.order'
           ]);
         });
 
@@ -2603,17 +2691,17 @@ describe('FlowScript', function () {
                 {
                   type: 'reply',
                   text: 'sure',
-                  payload: 'TestFlowDialog:onStart.sure'
+                  payload: 'TestFlowDialog:onStart.text.sure'
                 },
                 {
                   type: 'reply',
                   text: 'nah',
-                  payload: 'TestFlowDialog:onStart.nah'
+                  payload: 'TestFlowDialog:onStart.text.nah'
                 },
                 {
                   type: 'reply',
                   text: 'ask again',
-                  payload: 'TestFlowDialog:onStart.askAgain'
+                  payload: 'TestFlowDialog:onStart.text.askAgain'
                 }
               ]
             }
@@ -2633,7 +2721,7 @@ describe('FlowScript', function () {
               };
             }
           };
-          var handler = dialog._getFlowHandler('TestFlowDialog:onStart.sure.yes');
+          var handler = dialog._getFlowHandler('TestFlowDialog:onStart.text.sure.text.yes');
           await handler({}, fakeSession, ['onStart']);
 
           expect(events).to.deep.equal([
@@ -2648,7 +2736,7 @@ describe('FlowScript', function () {
                       {
                         text: "order",
                         type: "postback",
-                        payload: "this.postbackToken(TestFlowDialog:onStart.sure.yes.cookies.order,undefined)"
+                        payload: "this.postbackToken(TestFlowDialog:onStart.text.sure.text.yes.list.cookies.order,undefined)"
                       }
                     ]
                   },
@@ -2658,7 +2746,7 @@ describe('FlowScript', function () {
                       {
                         text: "order",
                         type: "postback",
-                        payload: "this.postbackToken(TestFlowDialog:onStart.sure.yes.cream.order,undefined)"
+                        payload: "this.postbackToken(TestFlowDialog:onStart.text.sure.text.yes.list.cream.order,undefined)"
                       }
                     ]
                   }

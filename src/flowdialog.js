@@ -118,10 +118,9 @@ export default class FlowDialog extends Dialog {
   _compileFlow(flow, path, options={}) {
     log.ifsilly(()=>['_compileFlow(%s,%s,%s)', stringify(flow), stringify(path), stringify(options)]);
     flow = normalizeFlow(flow);
-
     var compiledCommands = [];
     var cmd;
-    var nextflowCount = 0;
+    var nextFlowCount = 0;
     var commandCount = 0;
     var addCompiledCommand = function (compiledCommand) {
       if (commandCount==0) {
@@ -188,10 +187,10 @@ export default class FlowDialog extends Dialog {
 
         // break the rest of the flow into a separate handler, if it exists
         if (flow.length>0) {
-          nextflowCount += 1;
-          let nextId = commandId(flow[0], options.strictFlowId) || `@nextflow(${nextflowCount})`;
-          let nextFlowPath = appendFlowPathId(path, nextId);
-          this._compileFlow(flow, nextFlowPath, outerOptions);
+          nextFlowCount += 1;
+          let nextFlow = normalizeNextFlow(flow, options, nextFlowCount);
+          let nextFlowPath = appendFlowPathId(path, nextFlow.id);
+          this._compileFlow(nextFlow.flow, nextFlowPath, outerOptions);
           flowBreakerOptions = {...options, nextFlow: nextFlowPath };
         } else {
           flowBreakerOptions = outerOptions;
@@ -285,9 +284,15 @@ export default class FlowDialog extends Dialog {
         case 'iteration': return this._compileIterationCommand(cmd, path, options);
         case 'break': return this._compileIterationBreak(cmd, path, options);
         case 'continue': return this._compileIterationContinue(cmd, path, options);
+        case 'flow': return this._compileExplicitFlowCommand(cmd, path, options);
         default: throw new Error(`Failed while compiling unrecognized command: ${stringify(cmd)} at ${this.flowKey(path)}`);
       }
     }
+  }
+
+  _compileExplicitFlowCommand(cmd, path) {
+    path = [...path, cmd.id];
+    return this._compileFlow(cmd.flow, path);
   }
 
   _compileExecCommand(cmd, path) {
@@ -345,6 +350,7 @@ export default class FlowDialog extends Dialog {
    */
   _compileMessageCommand(command, path, options={}) {
     log.ifsilly(()=>['_compileMessageCommand(%s,%s)', stringify(command), stringify(path)]);
+    path = [...path, command.id];
     var compiledParams = {
       ...command,
       actions: this._compileMessageActions(command.actions, path, options, 'reply'),
@@ -883,7 +889,7 @@ export default class FlowDialog extends Dialog {
     var result = this._flowHandlers[fkey];
     if (!result && strict) {
       var closestKey = closestLevensteinMatch(fkey, Object.keys(this._flowHandlers));
-      throw new Error(`Attempt to access undefined flowHandler ${fkey}. Did you mean ${closestKey}?`);
+      throw new Error(`Attempt to access undefined flowHandler "${fkey}". Did you mean "${closestKey}"?`);
     }
     return result;
   }
@@ -915,6 +921,29 @@ export default class FlowDialog extends Dialog {
 //
 //
 
+export function normalizeNextFlow(flow, options, idCounter) {
+  if (flow.length==1 && flow[0].type=='flow') {
+    // the flow is a nextFlow already is an explicit flowCommand
+    if (flow[0].id=='flow') {
+      if (options.strictFlowId) {
+        throw new Error(`Invalid nextFlow: ${stringify(flow)}. `+
+        "options.strictFlowId setting an explicit id");
+      } else {
+        flow = {...flow[0], id: `flow${idCounter}`};
+      }
+    }
+    return flow;
+  } else {
+    if (options.strictFlowId) {
+      throw new Error(`Invalid nextFlow: ${stringify(flow)}. ` +
+      "options.strictFlowId requires providing an id for each next flow. "+
+      `Provide an id like so { id:'your-id-here', flow:${stringify(flow)}}`);
+    } else {
+      return { id:`flow${idCounter}`, type:'flow', flow: flow||[] };
+    }
+  }
+}
+
 export function normalizeFlows(flows) {
   log.ifsilly(()=>['normalizeFlows(%s)', stringify(flows)]);
   if (isPlainObject(flows)) {
@@ -943,7 +972,7 @@ export function normalizeFlowCommand(command) {
   if (isFunction(command)) {
     return command;
   } else if (isString(command)) {
-    return {type:'text', text:command};
+    return {id:'text', type:'text', text:command};
   } else if (isPlainObject(command)) {
     var type = command.type || inferCommandType(command);
 
@@ -967,6 +996,8 @@ export function normalizeFlowCommand(command) {
           return normalizeExecCommand(command);
         case 'iteration':
           return normalizeIterationCommand(command);
+        case 'flow':
+          return normalizeExplicitFlowCommand(command);
         default:
           return command;
       }
@@ -1144,13 +1175,18 @@ export function normalizeStartCommand(command) {
   return {...command, id};
 }
 
+export function normalizeExplicitFlowCommand(command) {
+  return { ...command, id: command.id || 'flow' };
+}
+
 export function normalizeMessageCommand(command) {
   log.ifsilly(()=>['normalizeMessageCommand(%s)', stringify(command)]);
   var actions = command.actions ? normalizeActions(command.actions, 'reply') : undefined;
   var items = command.items ? normalizeItems(command.items) : undefined;
   var flows = command.flows ? normalizeFlows(command.flows) : undefined;
+  var id = command.id || command.type;
 
-  return deleteUndefinedKeys({...command, actions, items, flows});
+  return deleteUndefinedKeys({...command, id, actions, items, flows});
 }
 
 export function normalizeItems(items) {
@@ -1256,22 +1292,22 @@ export function isFlowCommand(obj) {
   );
 }
 
-export function commandId(cmd, strict) {
-  var id;
-  if (isFunction(cmd)) {
-    id = cmd.name;
-  } else if (isPlainObject(cmd)) {
-    id = cmd.id;
-  }
-  if (!id && strict) {
-    var cmdStr = isFunction(cmd) ? cmd.toString() : stringify(cmd);
-    throw new Error(
-      `Command following a flow breaking command must have an id `+
-      `or handler must be a named function: ${cmdStr}`
-    );
-  }
-  return id;
-}
+// export function commandId(cmd, strict) {
+//   var id;
+//   if (isFunction(cmd)) {
+//     id = cmd.name;
+//   } else if (isPlainObject(cmd)) {
+//     id = cmd.id;
+//   }
+//   if (!id && strict) {
+//     var cmdStr = isFunction(cmd) ? cmd.toString() : stringify(cmd);
+//     throw new Error(
+//       `Command following a flow breaking command must have an id `+
+//       `or handler must be a named function: ${cmdStr}`
+//     );
+//   }
+//   return id;
+// }
 
 /**
  * isFlowBreaker - Commands which may require the server to relinquish control
@@ -1334,7 +1370,8 @@ export function isMessageType(type) {
 }
 
 export function isCommandType(type) {
-  return isMessageType(type) || ['wait', 'finish', 'start'].includes(type);
+  return (isMessageType(type) ||
+  ['switch', 'wait', 'finish', 'start', 'set', 'iteration', 'conditional', 'flow'].includes(type));
 }
 
 export function inferActionType(action, defaultType) {
@@ -1380,6 +1417,8 @@ export function inferCommandType(command) {
     return 'break';
   } else if (command.continue) {
     return 'continue';
+  } else if (command.flow) {
+    return 'flow';
   }
 }
 
