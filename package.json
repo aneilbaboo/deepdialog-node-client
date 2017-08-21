@@ -16,7 +16,12 @@
   ],
   "license": "MIT",
   "options": {
-    "mocha": "--require scripts/mocha_runner tests/**/*.test.js"
+    "mocha": "--require scripts/mocha_runner tests/**/*.test.js",
+    "@std/esm": {
+      "cjs": true,
+      "await": true,
+      "esm": "asdf"
+    }
   },
   "scripts": {
     "prepublishOnly": ". ./scripts/prepublishOnly.sh",
@@ -50,6 +55,7 @@
     "sinon": "2.3.5"
   },
   "dependencies": {
+    "@std/esm": "^0.5.1",
     "babel-cli": "6.24.1",
     "babel-preset-env": "1.6.0",
     "babel-preset-stage-3": "6.24.1",
