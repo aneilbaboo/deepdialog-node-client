@@ -1205,6 +1205,7 @@ export function normalizeItems(items) {
       normalizedItems.push({
         id: k,
         title: item.title || k,
+        description: item.description,
         actions: normalizeActions(item.actions, 'postback')
       });
     }

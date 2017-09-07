@@ -513,6 +513,7 @@ describe('FlowScript', function () {
           items: {
             first: {
               title: 'first item',
+              description: 'first item description',
               actions: {
                 button: {
                   text: 'push me',
@@ -528,6 +529,7 @@ describe('FlowScript', function () {
             {
               id: 'first',
               title: 'first item',
+              description: 'first item description',
               actions: [
                 {
                   id: 'button',
