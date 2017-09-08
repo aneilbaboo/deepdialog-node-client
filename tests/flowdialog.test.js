@@ -514,6 +514,8 @@ describe('FlowScript', function () {
             first: {
               title: 'first item',
               description: 'first item description',
+              mediaUrl: 'http://aws.com/myimage.png',
+              mediaType: 'image/png',
               actions: {
                 button: {
                   text: 'push me',
@@ -530,6 +532,8 @@ describe('FlowScript', function () {
               id: 'first',
               title: 'first item',
               description: 'first item description',
+              mediaUrl: 'http://aws.com/myimage.png',
+              mediaType: 'image/png',
               actions: [
                 {
                   id: 'button',

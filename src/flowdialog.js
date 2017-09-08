@@ -1206,6 +1206,8 @@ export function normalizeItems(items) {
         id: k,
         title: item.title || k,
         description: item.description,
+        mediaUrl: item.mediaUrl,
+        mediaType: item.mediaType,
         actions: normalizeActions(item.actions, 'postback')
       });
     }
