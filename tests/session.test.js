@@ -14,6 +14,10 @@ describe('Session', function () {
         app: app,
         id: 'session-id',
         globals: { Global: 1},
+        channel: {
+          id: 'channel-id',
+          type: 'smooch'
+        },
         currentFrame: {
           id: 'frame-id',
           dialog: 'theDialog',
@@ -53,6 +57,11 @@ describe('Session', function () {
       expect(()=>{ new Session("not a client inst", {id: '123', globals:{}, currentFrame: {}}); }).to.throw(Error);
     });
 
+    it('should set the channel', function () {
+      expect(session.channel).to.be.ok;
+      expect(session.channel.id).to.equal('channel-id');
+      expect(session.channel.type).to.equal('smooch');
+    });
   });
 
   context('variables', function () {

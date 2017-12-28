@@ -1,6 +1,6 @@
 {
   "name": "deepdialog",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Node client for interacting with DeepDialog service",
   "engines": {
     "npm": "5.1.0",
