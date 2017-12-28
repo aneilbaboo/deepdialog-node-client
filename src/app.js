@@ -270,7 +270,8 @@ export default class App {
       displayName: data.session.displayName,
       givenName: data.session.givenName,
       surname: data.session.surname,
-      currentFrame: currentFrame
+      currentFrame: currentFrame,
+      channel: data.session.channel
     });
     session.validate();
     return session;
@@ -281,6 +282,7 @@ export default class App {
     var result = await this.client.query(`query getSessions($id: String, $before: String, $limit:Int) {
       app { sessions(id:$id, before:$before, limit:$limit) {
         id globals stack(limit:1) { id locals tag dialog   }
+        channel { id type }
       } } }`,
       params);
 
@@ -290,6 +292,7 @@ export default class App {
       app: this,
       id: s.id,
       globals: s.globals,
+      channel: s.channel,
       currentFrame: s.stack[0]
     }));
   }
