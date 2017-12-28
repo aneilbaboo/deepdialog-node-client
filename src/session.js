@@ -6,21 +6,22 @@ import assert from 'assert';
 import log from './log';
 
 export default class Session {
-  constructor({app, id, globals, username, email, displayName, givenName, surname, accessToken, currentFrame, volatiles}) {
+  constructor({app, id, globals, username, email, displayName, channelId, givenName, surname, accessToken, currentFrame, volatiles}) {
     this._app = app;
     this._updateValues({
-      id, globals, currentFrame,
+      id, globals, currentFrame, channelId,
       username, displayName, email, givenName, surname,
       accessToken:accessToken || app.appSecret,
       volatiles});
   }
 
-  _updateValues({id, globals, accessToken, currentFrame, username, email, displayName, givenName, surname, volatiles}) {
+  _updateValues({id, globals, accessToken, channelId, currentFrame, username, email, displayName, givenName, surname, volatiles}) {
     var {id:frameId, dialog, locals, tag, dialogApp} = currentFrame || {};
     this._id = id;
     this._frameId = frameId;
     this._locals = locals || {};
     this._dialogName = dialog;
+    this._channelId = channelId;
     this._tag = tag;
     this._username = username;
     this._displayName = displayName;
@@ -66,6 +67,7 @@ export default class Session {
   get givenName() { return this._givenName; }
   get surname() { return this._surname; }
   get email() { return this._email; }
+  get channelId() { return this._channelId; }
 
   /**
    * get - gets a global or local variable
