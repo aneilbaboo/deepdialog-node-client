@@ -411,12 +411,10 @@ export default class Session {
     }
 
     var rawResult= await this.client.mutate(`($token: String, $args: JSON) {
-      sessionInvokePostback(token: $token, args: $args) }`,
-      {
-        token: postbackToken,
-        args: args
-      }
-    );
+      sessionInvokePostback(token: $token, args: $args) }`, {
+      token: postbackToken,
+      args: args
+    });
     if (rawResult) {
       return rawResult.sessionInvokePostback;
     }
