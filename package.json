@@ -50,6 +50,9 @@
     "sinon": "2.3.5"
   },
   "dependencies": {
+    "@babel/cli": "^7.10.4",
+    "@babel/polyfill": "^7.10.4",
+    "@babel/preset-env": "^7.10.4",
     "babel-cli": "6.24.1",
     "babel-preset-env": "1.6.0",
     "babel-preset-stage-3": "6.24.1",
@@ -60,7 +63,7 @@
     "express-promise-router": "1.1.1",
     "fast-levenshtein": "^2.0.6",
     "jwt-simple": "^0.5.6",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.2",
     "lokka": "1.7.0",
     "lokka-transport-http": "1.6.1",
     "micromustache": "5.2.0",
