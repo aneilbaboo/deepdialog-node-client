@@ -1447,7 +1447,7 @@ export function deleteUndefinedKeys(o) {
 //
 
 export function isValidFlowId(id) {
-  return isNumber(id) || (isString(id) && /^[#]?[^\.#:|\r\n]+$/.test(id));
+  return isNumber(id) || (isString(id) && /^[#]?[^.#:|\r\n]+$/.test(id));
 }
 
 export function appendFlowPathId(path, ...ids) {

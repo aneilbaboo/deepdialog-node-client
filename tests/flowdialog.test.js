@@ -27,7 +27,7 @@ describe('FlowScript', function () {
   var sandbox;
 
   beforeEach(function () {
-    sandbox = sinon.sandbox.create();
+    sandbox = sinon.createSandbox();
   });
 
   afterEach(function () {
@@ -1071,10 +1071,10 @@ describe('FlowScript', function () {
             }
           ], ['compiledPath']);
           await handler({a:1}, fakeSession, ['providedPath']);
-          expect(events.sort(jsonSort)).to.deep.equal([
+          expect(events).to.deep.include.members([
             {send:{type:'text', text:'dynamic-text'}},
             {record: {path:['compiledPath', 'text'], vars:{a:1}}}
-          ].sort(jsonSort));
+          ]);
         });
 
       });
@@ -1409,7 +1409,7 @@ describe('FlowScript', function () {
           await handler({a:1}, "the-session", []);
           expect(sleepStub.withArgs(5000).calledOnce).to.be.true;
           expect(valueHandlerStub.withArgs(
-            sinon.match({a:1}, 'the-session', ['onStart'])).calledOnce
+            sinon.match({a:1}), 'the-session', ['onStart']).calledOnce
           ).to.be.true;
         });
 
@@ -2667,18 +2667,18 @@ describe('FlowScript', function () {
         });
 
         it('the dialog should have the expected payload handlers', function (){
-          var inputHandlerPatterns = dialog.inputHandlers.map(h=>h[0]).sort(jsonSort);
-          expect(inputHandlerPatterns).to.deep.equal([
+          var inputHandlerPatterns = dialog.inputHandlers.map(h=>h[0]);
+          expect(inputHandlerPatterns).to.deep.include.members([
             {payload:'TestFlowDialog:onStart.text.sure'},
             {payload:'TestFlowDialog:onStart.text.sure.text.yes'},
             {payload:'TestFlowDialog:onStart.text.sure.text.no'},
             {payload:'TestFlowDialog:onStart.text.nah'},
             {payload:'TestFlowDialog:onStart.text.askAgain'}
-          ].sort(jsonSort));
+          ]);
         });
 
         it('the dialog should have the expected postback handlers', function () {
-          expect(Object.keys(dialog.postbackHandlers).sort(jsonSort)).to.deep.equal([
+          expect(Object.keys(dialog.postbackHandlers)).to.deep.include.members([
             'TestFlowDialog:onStart.text.sure.text.yes.list.cookies.order',
             'TestFlowDialog:onStart.text.sure.text.yes.list.cream.order'
           ]);
@@ -2781,8 +2781,3 @@ describe('FlowScript', function () {
     });
   });
 });
-
-// useful sort comparison fn when deep-equal checking two arrays of unordered objects
-function jsonSort(x,y) {
-  return JSON.stringify(x)>JSON.stringify(y);
-}

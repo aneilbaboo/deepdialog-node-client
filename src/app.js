@@ -134,7 +134,7 @@ export default class App {
               webhook
             }
           }`,
-          variables);
+    variables);
   }
 
   createServer() {
@@ -228,9 +228,9 @@ export default class App {
   async handleFrameResult(session, notification) {
     var completedFrame = notification.session.completedFrame[0];
     var completedDialogRef = (this.id!=completedFrame.dialogApp.id
-          // completed frame is remote - lookup using the remote app name
-          ? `${completedFrame.dialogApp.name}:${completedFrame.dialog}`
-          : completedFrame.dialog);
+      // completed frame is remote - lookup using the remote app name
+      ? `${completedFrame.dialogApp.name}:${completedFrame.dialog}`
+      : completedFrame.dialog);
     var resultHandler = session.dialog.getResultHandler(completedDialogRef, completedFrame.tag);
     log.info('Received frame_result for session: %s notification: %j', session.id, notification);
 
@@ -280,11 +280,11 @@ export default class App {
   async getSessions(params) {
     log.debug('App#getSessions %j', params);
     var result = await this.client.query(`query getSessions($id: String, $before: String, $limit:Int) {
-      app { sessions(id:$id, before:$before, limit:$limit) {
-        id globals stack(limit:1) { id locals tag dialog   }
-        channel { id type }
-      } } }`,
-      params);
+        app { sessions(id:$id, before:$before, limit:$limit) {
+          id globals stack(limit:1) { id locals tag dialog   }
+          channel { id type }
+        } } }`,
+    params);
 
     var sessions = result.app.sessions;
     log.debug('App#getSessions => %j', sessions);
